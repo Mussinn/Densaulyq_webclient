@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ФИКСИРОВАННЫЙ ЧАТ-БОТ СПРАВА СНИЗУ */
+.floating-chat-bot {
+  position: fixed !important;
+  bottom: 1.5rem !important;
+  right: 1.5rem !important;
+  left: auto !important;
+  top: auto !important;
+  z-index: 9999 !important;
+}
+
+.floating-chat-bot * {
+  position: static !important;
+}
+
+/* Гарантируем, что кнопка всегда справа */
+.floating-chat-button {
+  margin-left: auto !important;
+  margin-right: 0 !important;
+}
+
+/* На мобильных */
+@media (max-width: 768px) {
+  .floating-chat-bot {
+    bottom: 1rem !important;
+    right: 1rem !important;
+  }
+}
+
+/* Убираем любые трансформации у родителей */
+body > * {
+  transform: none !important;
+}
+
+/* Переопределяем Tailwind если нужно */
+.fixed {
+  position: fixed !important;
+}
+
+.right-6 {
+  right: 1.5rem !important;
+  left: auto !important;
+}
+
+.bottom-6 {
+  bottom: 1.5rem !important;
+  top: auto !important;
+}
