@@ -8,8 +8,8 @@ const OnlineBooking = () => {
   const [selectedDoctor, setSelectedDoctor] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [availableSlots, setAvailableSlots] = useState([]);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [allAppointments, setAllAppointments] = useState([]); // Все записи
+  const [currentPatient, setCurrentPatient] = useState(null); // Изменено на patient
+  const [allAppointments, setAllAppointments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingAppointments, setLoadingAppointments] = useState(false);
   const [error, setError] = useState('');
@@ -17,12 +17,11 @@ const OnlineBooking = () => {
   
   const { token } = useSelector((state) => state.token);
 
-  // Конфигурация рабочих часов
   const WORK_HOURS = {
     start: 9, end: 18, slotDuration: 30
   };
 
-  // 1. ЗАГРУЗКА ДОКТОРОВ И ПОЛЬЗОВАТЕЛЯ
+  // 1. ЗАГРУЗКА ДОКТОРОВ И ПАЦИЕНТА
   const fetchData = async () => {
     try {
       if (!token) throw new Error('Токен табылмады');
@@ -38,21 +37,23 @@ const OnlineBooking = () => {
         setDoctors(doctorsResponse.data);
       }
       
-      // Загружаем текущего пользователя
-      const userResponse = await api.get('/api/v1/users/me', {
+      // Загружаем текущего пациента
+      const patientResponse = await api.get('/api/v1/patient/me', {
         headers: { Authorization: `Bearer ${token.trim()}` },
       });
       
-      setCurrentUser(userResponse.data);
+      setCurrentPatient(patientResponse.data);
+      console.log('Пациент загружен:', patientResponse.data);
       
     } catch (err) {
+      console.error('Ошибка загрузки пациента:', err);
       setError('Деректерді жүктеу кезінде қате: ' + (err.message || err));
     } finally {
       setLoading(false);
     }
   };
 
-  // 2. ЗАГРУЗКА ВСЕХ APPOINTMENTS ДЛЯ ФИЛЬТРАЦИИ
+  // 2. ЗАГРУЗКА ВСЕХ APPOINTMENTS
   const fetchAllAppointments = async () => {
     try {
       if (!token) return;
@@ -72,7 +73,6 @@ const OnlineBooking = () => {
       
     } catch (err) {
       console.error('Ошибка загрузки записей:', err);
-      // Если endpoint не работает, используем пустой массив
       setAllAppointments([]);
     } finally {
       setLoadingAppointments(false);
@@ -84,27 +84,27 @@ const OnlineBooking = () => {
     try {
       if (!token) throw new Error('Токен табылмады');
       if (!selectedDoctor) throw new Error('Дәрігер таңдалмады');
-      if (!currentUser?.userId) throw new Error('Пайдаланушы мәліметтері жүктелмеді');
+      if (!currentPatient?.patientId) throw new Error('Пациент мәліметтері жүктелмеді');
 
       setLoading(true);
       setError('');
       setSuccess('');
       
       // Создаем дату приема
-    const appointmentDateTime = new Date(date);
-    const [hours, minutes] = time.split(':').map(Number);
-    
-    // Добавляем 5 часов (если вы в часовом поясе UTC+5)
-    const correctedHours = hours + 5;
-    
-    appointmentDateTime.setHours(correctedHours, minutes, 0, 0);
-    
-    const payload = {
-      doctorId: selectedDoctor.doctorId,
-      patientId: patientResponse.data.patientId,
-      appointmentDate: appointmentDateTime.toISOString(),
-      status: "scheduled"
-    };
+      const appointmentDateTime = new Date(date);
+      const [hours, minutes] = time.split(':').map(Number);
+      
+      // Добавляем 5 часов (если вы в часовом поясе UTC+5)
+      const correctedHours = hours + 5;
+      
+      appointmentDateTime.setHours(correctedHours, minutes, 0, 0);
+      
+      const payload = {
+        doctorId: selectedDoctor.doctorId,
+        patientId: currentPatient.patientId, // Используем patientId
+        appointmentDate: appointmentDateTime.toISOString(),
+        status: "scheduled"
+      };
       
       console.log('📤 Отправляемый payload:', payload);
       
@@ -151,7 +151,7 @@ const OnlineBooking = () => {
     }
   };
 
-  // 4. ГЕНЕРАЦИЯ СЛОТОВ С ФИЛЬТРАЦИЕЙ ЗАНЯТЫХ ВРЕМЕН
+  // 4. ГЕНЕРАЦИЯ СЛОТОВ С ФИЛЬТРАЦИЕЙ
   const generateTimeSlots = () => {
     if (!selectedDoctor || !selectedDate) return [];
     
@@ -165,21 +165,18 @@ const OnlineBooking = () => {
     const now = new Date();
     const minTime = new Date(now.getTime() + 60 * 60000); // Минимум через 1 час
     
-    // Получаем занятые слоты для выбранного доктора на выбранную дату
+    // Получаем занятые слоты
     const busySlots = allAppointments
       .filter(app => {
-        // Проверяем, что запись относится к выбранному доктору
         if (!app.doctor || app.doctor.doctorId !== selectedDoctor.doctorId) {
           return false;
         }
         
-        // Проверяем дату
         const appDate = new Date(app.appointmentDate);
         const isSameDay = appDate.getDate() === selectedDate.getDate() &&
                          appDate.getMonth() === selectedDate.getMonth() &&
                          appDate.getFullYear() === selectedDate.getFullYear();
         
-        // Проверяем статус (только активные записи считаются занятыми)
         const isActiveStatus = app.status === 'scheduled' || 
                                app.status === 'SCHEDULED' || 
                                app.status === 'confirmed' ||
@@ -189,11 +186,10 @@ const OnlineBooking = () => {
       })
       .map(app => {
         const appDate = new Date(app.appointmentDate);
-        // Форматируем время как "HH:MM"
         return `${appDate.getHours().toString().padStart(2, '0')}:${appDate.getMinutes().toString().padStart(2, '0')}`;
       });
     
-    console.log(`Занятые слоты для доктора ${selectedDoctor.doctorId}:`, busySlots);
+    console.log(`Занятые слоты:`, busySlots);
     
     // Генерируем слоты
     let currentTime = new Date(startDate);
@@ -229,7 +225,6 @@ const OnlineBooking = () => {
     setSelectedDoctor(doctor);
     setSelectedDate(new Date());
     
-    // Загружаем записи если еще не загружены
     if (allAppointments.length === 0) {
       await fetchAllAppointments();
     }
@@ -262,13 +257,15 @@ const OnlineBooking = () => {
   useEffect(() => {
     const loadData = async () => {
       await fetchData();
-      await fetchAllAppointments(); // Загружаем записи заранее
+      await fetchAllAppointments();
     };
     
-    loadData();
-  }, []);
+    if (token) {
+      loadData();
+    }
+  }, [token]);
 
-  // Обновление слотов при изменении
+  // Обновление слотов
   useEffect(() => {
     if (selectedDoctor && selectedDate) {
       generateTimeSlots();
@@ -295,16 +292,18 @@ const OnlineBooking = () => {
         )}
 
         <div className="max-w-6xl mx-auto">
-          {/* Информация о текущем пользователе */}
-          {currentUser && (
+          {/* Информация о текущем пациенте */}
+          {currentPatient && (
             <div className="mb-6 p-4 bg-blue-50 rounded-xl">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-700 font-medium">
-                    👤 Сіз: {currentUser.firstName} {currentUser.lastName}
+                    👤 Сіз: {currentPatient.user?.firstName} {currentPatient.user?.lastName}
                   </p>
                   <p className="text-sm text-gray-500 mt-1">
-                    Пайдаланушы ID: {currentUser.userId}
+                    Пациент ID: {currentPatient.patientId} | 
+                    Email: {currentPatient.user?.email} |
+                    Телефон: {currentPatient.contactNumber || 'Не указан'}
                   </p>
                 </div>
                 <div className="text-sm text-gray-600">
@@ -337,8 +336,10 @@ const OnlineBooking = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {doctors.map((doctor) => (
-                  <div
+                  <motion.div
                     key={doctor.doctorId}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                     className={`p-4 border rounded-lg cursor-pointer transition-all ${
                       selectedDoctor?.doctorId === doctor.doctorId
                         ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
@@ -367,7 +368,7 @@ const OnlineBooking = () => {
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
             )}
@@ -420,8 +421,10 @@ const OnlineBooking = () => {
                     const isSelected = date.toDateString() === selectedDate.toDateString();
                     
                     return (
-                      <button
+                      <motion.button
                         key={i}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
                         className={`flex-shrink-0 px-4 py-3 rounded-lg border transition-all ${
                           isSelected
                             ? 'bg-blue-600 text-white border-blue-600'
@@ -442,7 +445,7 @@ const OnlineBooking = () => {
                             {date.toLocaleDateString('kk-KZ', { month: 'short' })}
                           </div>
                         </div>
-                      </button>
+                      </motion.button>
                     );
                   })}
                 </div>
@@ -480,8 +483,10 @@ const OnlineBooking = () => {
                   <>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
                       {availableSlots.map((slot, index) => (
-                        <button
+                        <motion.button
                           key={index}
+                          whileHover={{ scale: slot.isAvailable ? 1.05 : 1 }}
+                          whileTap={{ scale: slot.isAvailable ? 0.95 : 1 }}
                           className={`p-3 rounded-lg border text-center transition-all ${
                             slot.isAvailable
                               ? 'border-green-300 bg-green-50 hover:bg-green-100 hover:border-green-400 text-green-800 hover:shadow-md'
@@ -503,7 +508,7 @@ const OnlineBooking = () => {
                           {slot.isAvailable && loading && (
                             <div className="text-xs text-blue-500 mt-1">...</div>
                           )}
-                        </button>
+                        </motion.button>
                       ))}
                     </div>
                     

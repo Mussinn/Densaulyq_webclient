@@ -1,7 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import api from '../../utils/api';
-import { FaVideo, FaCopy, FaEnvelope, FaCalendar, FaSpinner } from "react-icons/fa";
+import { 
+  FaVideo, 
+  FaCopy, 
+  FaEnvelope, 
+  FaCalendar, 
+  FaSpinner, 
+  FaCheck, 
+  FaUserMd, 
+  FaUserInjured, 
+  FaClock,
+  FaCheckCircle,
+  FaTimes,
+  FaPlay,
+  FaStop,
+  FaShare,
+  FaLink,
+  FaPaperPlane,
+  FaExclamationTriangle
+} from "react-icons/fa";
 
 const DoctorAppointments = () => {
   const [appointments, setAppointments] = useState([]);
@@ -14,7 +32,6 @@ const DoctorAppointments = () => {
   const [meetingData, setMeetingData] = useState(null);
   const [inviteEmail, setInviteEmail] = useState('');
   const [sendingInvite, setSendingInvite] = useState(false);
-  const [creatingMeeting, setCreatingMeeting] = useState(false);
   
   const { token } = useSelector((state) => state.token);
 
@@ -25,16 +42,15 @@ const DoctorAppointments = () => {
       const userRes = await api.get('/api/v1/users/me', {
         headers: { Authorization: `Bearer ${token}` },
       });
-      
+
       const user = userRes.data;
       const doctorId = user?.doctor?.doctorId || user?.userId;
-      
+
       if (doctorId) {
-        // Загрузка записей на прием
         const appointmentsRes = await api.get(`/api/appointments/doctor/${doctorId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        
+
         const normalizedAppointments = appointmentsRes.data?.map(app => ({
           ...app,
           id: app.appointment_id || app.appointmentId || app.id,
@@ -42,10 +58,8 @@ const DoctorAppointments = () => {
           patientEmail: app.patient?.email || app.patient?.user?.email,
           patientId: app.patient?.patientId || app.patient?.id
         })) || [];
-        
+
         setAppointments(normalizedAppointments);
-        
-        // Загрузка встреч доктора
         await fetchMeetings(doctorId);
       }
     } catch (err) {
@@ -63,7 +77,7 @@ const DoctorAppointments = () => {
       const response = await api.get(`/api/v1/meetings/doctor/${doctorId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      
+
       setMeetings(response.data || []);
     } catch (err) {
       console.error('Ошибка загрузки встреч:', err);
@@ -76,123 +90,133 @@ const DoctorAppointments = () => {
   // Обновление статуса записи
   const updateStatus = async (id, status) => {
     try {
-      await api.patch(`/api/appointments/${id}/status`, 
+      await api.patch(`/api/appointments/${id}/status`,
         { status },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      
-      setAppointments(prev => prev.map(app => 
+
+      setAppointments(prev => prev.map(app =>
         app.id === id ? { ...app, status } : app
       ));
-      
+
       alert(`Статус изменен на: ${status}`);
     } catch (err) {
       alert('Ошибка обновления статуса: ' + (err.response?.data?.message || err.message));
     }
   };
 
-  // Создание встречи
-  const createMeeting = async (appointment) => {
+  // Открытие модалки для создания встречи
+  const openMeetingModal = async (appointment) => {
     setSelectedAppointment(appointment);
     setInviteEmail(appointment.patientEmail || '');
     setShowMeetingModal(true);
-    setCreatingMeeting(true);
-    
-    try {
-      // Получаем информацию о текущем пользователе (докторе)
-      const userRes = await api.get('/api/v1/users/me', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      
-      const user = userRes.data;
-      const doctorId = user?.doctor?.doctorId || user?.userId;
-      
-      if (!doctorId) {
-        throw new Error('Не удалось получить ID доктора');
-      }
-      
-      // Создаем встречу через простой эндпоинт
-      const response = await api.get(`/api/v1/meetings/create-simple`, {
-        params: {
-          topic: `Консультация-${appointment.patientName}`,
-          doctorId: doctorId,
-          patientId: appointment.patientId,
-          patientEmail: appointment.patientEmail
-        },
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      
-      const meetingInfo = response.data;
-      setMeetingData({
-        meetingUrl: meetingInfo.meetingUrl,
-        roomId: meetingInfo.roomId,
-        message: meetingInfo.message
-      });
-      
-      // Обновляем список встреч
-      await fetchMeetings(doctorId);
-      
-    } catch (err) {
-      console.error('Ошибка создания встречи:', err);
-      // Fallback на локальную генерацию
-      const fallbackMeetingUrl = `https://meet.jit.si/consult-${Date.now()}`;
-      setMeetingData({
-        meetingUrl: fallbackMeetingUrl,
-        roomId: `consult-${Date.now()}`,
-        message: 'Ссылка сгенерирована локально'
-      });
-    } finally {
-      setCreatingMeeting(false);
-    }
+    setMeetingData(null);
   };
 
-  // Отправка приглашения (используем API повторной отправки)
+  // Отправка приглашения через POST /api/v1/meetings
   const sendInvite = async () => {
-    if (!inviteEmail) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const cleanedEmail = inviteEmail?.trim() || '';
+    
+    if (!cleanedEmail) {
       alert('Введите email пациента');
       return;
     }
     
+    if (!emailRegex.test(cleanedEmail)) {
+      alert('Введите корректный email адрес (например: patient@example.com)');
+      return;
+    }
+
     setSendingInvite(true);
     try {
-      // Если у нас есть ID созданной встречи, используем resend-invite
-      // В противном случае просто показываем сообщение
-      
-      // Создаем встречу через POST если нужно
       const userRes = await api.get('/api/v1/users/me', {
         headers: { Authorization: `Bearer ${token}` },
       });
-      
+
       const user = userRes.data;
       const doctorId = user?.doctor?.doctorId || user?.userId;
-      
-      // Используем POST endpoint для создания встречи с отправкой email
+
+      if (!doctorId) {
+        throw new Error('Не удалось получить ID доктора');
+      }
+
+      if (!selectedAppointment?.patientId) {
+        throw new Error('У пациента отсутствует ID');
+      }
+
       const response = await api.post('/api/v1/meetings', {
-        doctorId: doctorId,
-        patientId: selectedAppointment?.patientId,
-        patientEmail: inviteEmail,
+        appointmentId: Number(selectedAppointment?.id) || 0,
+        doctorId: Number(doctorId) || 0,
+        patientId: Number(selectedAppointment?.patientId) || 0,
         topic: `Консультация с ${selectedAppointment?.patientName}`,
+        description: 'Консультация врача',
         scheduledTime: new Date().toISOString(),
-        durationMinutes: 30
+        durationMinutes: 30,
+        patientEmail: cleanedEmail,
       }, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
       });
-      
+
       const meeting = response.data;
+      
       setMeetingData({
         meetingUrl: meeting.meetingUrl,
         roomId: meeting.roomId,
-        message: 'Встреча создана и приглашение отправлено'
+        message: 'Встреча создана и приглашение отправлено',
+        id: meeting.id
       });
-      
-      // Обновляем список встреч
+
       await fetchMeetings(doctorId);
-      
-      alert(`Приглашение отправлено на ${inviteEmail}`);
-      
+
     } catch (err) {
-      console.error('Ошибка отправки приглашения:', err);
-      alert('Ошибка отправки приглашения. Проверьте настройки email.');
+      console.error('Ошибка создания встречи:', err);
+      
+      let errorMessage = 'Ошибка создания встречи';
+      if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.response?.status === 500) {
+        errorMessage = 'Внутренняя ошибка сервера';
+      }
+      
+      alert(errorMessage);
+      
+      try {
+        const userRes = await api.get('/api/v1/users/me', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        
+        const user = userRes.data;
+        const doctorId = user?.doctor?.doctorId || user?.userId;
+        
+        const simpleResponse = await api.get(`/api/v1/meetings/create-simple`, {
+          params: {
+            topic: `Консультация-${selectedAppointment?.patientName}`,
+            doctorId: Number(doctorId),
+            patientId: Number(selectedAppointment?.patientId),
+            patientEmail: cleanedEmail
+          },
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        
+        const meetingInfo = simpleResponse.data;
+        setMeetingData({
+          meetingUrl: meetingInfo.meetingUrl,
+          roomId: meetingInfo.roomId,
+          message: 'Встреча создана (резервный режим)'
+        });
+        
+      } catch (fallbackErr) {
+        console.error('Fallback error:', fallbackErr);
+        setMeetingData({
+          meetingUrl: '',
+          roomId: '',
+          message: 'Не удалось создать встречу'
+        });
+      }
     } finally {
       setSendingInvite(false);
     }
@@ -209,16 +233,15 @@ const DoctorAppointments = () => {
   // Обновление статуса встречи
   const updateMeetingStatus = async (meetingId, status) => {
     try {
-      await api.patch(`/api/v1/meetings/${meetingId}/status`, 
+      await api.patch(`/api/v1/meetings/${meetingId}/status`,
         { status },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      
-      // Обновляем локальный список
-      setMeetings(prev => prev.map(meeting => 
+
+      setMeetings(prev => prev.map(meeting =>
         meeting.id === meetingId ? { ...meeting, status } : meeting
       ));
-      
+
       alert(`Статус встречи изменен: ${status}`);
     } catch (err) {
       alert('Ошибка обновления статуса встречи');
@@ -253,9 +276,31 @@ const DoctorAppointments = () => {
     }
   };
 
+  // Перевод статуса записи
+  const getAppointmentStatusText = (status) => {
+    switch(status) {
+      case 'scheduled': return 'Запланирована';
+      case 'confirmed': return 'Подтверждена';
+      case 'completed': return 'Завершена';
+      case 'cancelled': return 'Отменена';
+      default: return status;
+    }
+  };
+
+  // Цвет статуса записи
+  const getAppointmentStatusColor = (status) => {
+    switch(status) {
+      case 'scheduled': return 'bg-blue-100 text-blue-800 border border-blue-200';
+      case 'confirmed': return 'bg-green-100 text-green-800 border border-green-200';
+      case 'completed': return 'bg-gray-100 text-gray-800 border border-gray-200';
+      case 'cancelled': return 'bg-red-100 text-red-800 border border-red-200';
+      default: return 'bg-yellow-100 text-yellow-800';
+    }
+  };
+
   // Перевод статуса встречи
   const getMeetingStatusText = (status) => {
-    switch(status) {
+    switch (status) {
       case 'SCHEDULED': return 'Запланирована';
       case 'ACTIVE': return 'Активна';
       case 'COMPLETED': return 'Завершена';
@@ -266,310 +311,498 @@ const DoctorAppointments = () => {
 
   // Цвет статуса встречи
   const getMeetingStatusColor = (status) => {
-    switch(status) {
-      case 'SCHEDULED': return 'bg-blue-100 text-blue-800';
-      case 'ACTIVE': return 'bg-green-100 text-green-800';
-      case 'COMPLETED': return 'bg-gray-100 text-gray-800';
-      case 'CANCELLED': return 'bg-red-100 text-red-800';
+    switch (status) {
+      case 'SCHEDULED': return 'bg-blue-100 text-blue-800 border border-blue-200';
+      case 'ACTIVE': return 'bg-green-100 text-green-800 border border-green-200';
+      case 'COMPLETED': return 'bg-gray-100 text-gray-800 border border-gray-200';
+      case 'CANCELLED': return 'bg-red-100 text-red-800 border border-red-200';
       default: return 'bg-yellow-100 text-yellow-800';
     }
   };
 
   return (
-    <div className="p-4 max-w-6xl mx-auto">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto">
+      {/* Заголовок и фильтры */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold mb-4">Записи на прием</h1>
-        <div className="flex flex-wrap gap-2 mb-4">
-          {['all', 'active', 'completed', 'cancelled'].map(f => (
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">Записи на прием</h1>
+            <p className="text-gray-600">Управление приемами пациентами</p>
+          </div>
+          <button
+            onClick={fetchData}
+            className="mt-4 md:mt-0 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-200 flex items-center shadow-md hover:shadow-lg"
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <FaSpinner className="animate-spin mr-2" />
+                Загрузка...
+              </>
+            ) : (
+              <>
+                <FaCalendar className="mr-2" /> Обновить список
+              </>
+            )}
+          </button>
+        </div>
+
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+          <div className="flex flex-wrap gap-2">
             <button
-              key={f}
-              className={`px-3 py-1 rounded ${filter === f ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
-              onClick={() => setFilter(f)}
+              onClick={() => setFilter('all')}
+              className={`px-4 py-2.5 rounded-xl flex items-center transition-all ${filter === 'all' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}
             >
-              {f === 'all' ? 'Все' : 
-               f === 'active' ? 'Активные' :
-               f === 'completed' ? 'Завершенные' : 'Отмененные'}
+              <FaCalendar className="mr-2" /> Все записи
             </button>
-          ))}
+            <button
+              onClick={() => setFilter('active')}
+              className={`px-4 py-2.5 rounded-xl flex items-center transition-all ${filter === 'active' ? 'bg-green-600 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}
+            >
+              <FaCheckCircle className="mr-2" /> Активные
+            </button>
+            <button
+              onClick={() => setFilter('completed')}
+              className={`px-4 py-2.5 rounded-xl flex items-center transition-all ${filter === 'completed' ? 'bg-gray-600 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}
+            >
+              <FaCheck className="mr-2" /> Завершенные
+            </button>
+            <button
+              onClick={() => setFilter('cancelled')}
+              className={`px-4 py-2.5 rounded-xl flex items-center transition-all ${filter === 'cancelled' ? 'bg-red-600 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}
+            >
+              <FaTimes className="mr-2" /> Отмененные
+            </button>
+          </div>
         </div>
-        <button
-          onClick={fetchData}
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center"
-          disabled={loading}
-        >
-          {loading ? (
-            <>
-              <FaSpinner className="animate-spin mr-2" />
-              Загрузка...
-            </>
-          ) : 'Обновить'}
-        </button>
       </div>
 
-      {/* Список записей */}
-      <div className="bg-white rounded-lg shadow overflow-hidden mb-8">
-        {loading ? (
-          <div className="p-8 text-center">
-            <FaSpinner className="animate-spin mx-auto text-2xl text-blue-600 mb-2" />
-            <p>Загрузка записей...</p>
+      {/* Основной контент в двух колонках */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Левая колонка: Записи на прием - ФИКСИРОВАННАЯ ВЫСОТА С ПРОКРУТКОЙ */}
+        <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden flex flex-col" style={{ height: '700px' }}>
+          <div className="p-6 border-b border-gray-100 flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <div className="p-2.5 bg-blue-50 rounded-xl mr-3">
+                  <FaUserMd className="text-xl text-blue-600" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-800">Записи пациентов</h2>
+                  <p className="text-sm text-gray-500">Запланированные приемы</p>
+                </div>
+              </div>
+              <span className="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full">
+                {filteredApps.length} записей
+              </span>
+            </div>
           </div>
-        ) : filteredApps.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">Нет записей</div>
-        ) : (
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="p-3 text-left">Пациент</th>
-                <th className="p-3 text-left">Дата</th>
-                <th className="p-3 text-left">Статус</th>
-                <th className="p-3 text-left">Действия</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredApps.map(app => (
-                <tr key={app.id} className="border-t hover:bg-gray-50">
-                  <td className="p-3">
-                    <div className="font-medium">{app.patientName}</div>
-                    {app.patientEmail && (
-                      <div className="text-sm text-gray-500">{app.patientEmail}</div>
-                    )}
-                  </td>
-                  <td className="p-3">
-                    {formatDateTime(app.appointmentDate)}
-                  </td>
-                  <td className="p-3">
-                    <span className={`px-2 py-1 rounded text-sm ${
-                      app.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                      app.status === 'completed' ? 'bg-gray-100 text-gray-800' :
-                      app.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                      'bg-blue-100 text-blue-800'
-                    }`}>
-                      {app.status}
-                    </span>
-                  </td>
-                  <td className="p-3 space-x-2">
-                    {app.status === 'scheduled' && (
-                      <>
-                        <button
-                          onClick={() => updateStatus(app.id, 'confirmed')}
-                          className="text-green-600 hover:text-green-800 text-sm"
-                        >
-                          Принять
-                        </button>
-                        <button
-                          onClick={() => updateStatus(app.id, 'cancelled')}
-                          className="text-red-600 hover:text-red-800 text-sm"
-                        >
-                          Отклонить
-                        </button>
-                      </>
-                    )}
-                    {app.status === 'confirmed' && (
-                      <>
-                        <button
-                          onClick={() => updateStatus(app.id, 'completed')}
-                          className="text-blue-600 hover:text-blue-800 text-sm mr-2"
-                        >
-                          Завершить
-                        </button>
-                        <button
-                          onClick={() => createMeeting(app)}
-                          className="text-purple-600 hover:text-purple-800 text-sm flex items-center"
-                          disabled={creatingMeeting}
-                        >
-                          <FaVideo className="mr-1" /> 
-                          {creatingMeeting ? 'Создание...' : 'Создать встречу'}
-                        </button>
-                      </>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
 
-      {/* Список встреч */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="p-4 border-b flex justify-between items-center">
-          <h2 className="text-xl font-bold flex items-center">
-            <FaCalendar className="mr-2 text-blue-600" />
-            Видеовстречи
-          </h2>
-          {meetingsLoading && (
-            <FaSpinner className="animate-spin text-blue-600" />
-          )}
-        </div>
-        
-        {meetingsLoading ? (
-          <div className="p-8 text-center">
-            <FaSpinner className="animate-spin mx-auto text-2xl text-blue-600 mb-2" />
-            <p>Загрузка встреч...</p>
+          <div className="p-4 flex-grow overflow-y-auto">
+            {loading ? (
+              <div className="py-12 text-center">
+                <FaSpinner className="animate-spin mx-auto text-3xl text-blue-600 mb-4" />
+                <p className="text-gray-600">Загрузка записей...</p>
+              </div>
+            ) : filteredApps.length === 0 ? (
+              <div className="py-12 text-center">
+                <div className="text-gray-400 mb-3">
+                  <FaCalendar className="text-4xl mx-auto" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-700 mb-2">Нет записей</h3>
+                <p className="text-gray-500">Выберите другой фильтр или проверьте позже</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredApps.map(app => (
+                  <div key={app.id} className="bg-gray-50 rounded-xl p-4 hover:bg-blue-50 transition-all duration-200 border border-gray-100">
+                    <div className="flex flex-col md:flex-row md:items-start md:justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-start mb-3">
+                          <div className="p-2 bg-white rounded-lg mr-3 border border-gray-200">
+                            <FaUserInjured className="text-gray-600" />
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-gray-800 text-lg mb-1">{app.patientName}</h3>
+                            {app.patientEmail && (
+                              <p className="text-gray-600 text-sm flex items-center">
+                                <FaEnvelope className="mr-1.5 text-gray-400" size={12} /> {app.patientEmail}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center text-gray-600 text-sm mb-3">
+                          <FaClock className="mr-1.5 text-gray-400" />
+                          <span className="font-medium">{formatDateTime(app.appointmentDate)}</span>
+                        </div>
+                        
+                        <span className={`px-3 py-1.5 rounded-lg text-sm font-medium inline-flex items-center ${getAppointmentStatusColor(app.status)}`}>
+                          {app.status === 'confirmed' && <FaCheckCircle className="mr-1.5" size={12} />}
+                          {app.status === 'cancelled' && <FaTimes className="mr-1.5" size={12} />}
+                          {getAppointmentStatusText(app.status)}
+                        </span>
+                      </div>
+                      
+                      <div className="mt-4 md:mt-0 md:ml-4">
+                        <div className="flex flex-col space-y-2">
+                          {app.status === 'scheduled' && (
+                            <>
+                              <button
+                                onClick={() => updateStatus(app.id, 'confirmed')}
+                                className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors flex items-center justify-center text-sm font-medium"
+                              >
+                                <FaCheck className="mr-2" /> Подтвердить
+                              </button>
+                              <button
+                                onClick={() => updateStatus(app.id, 'cancelled')}
+                                className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors flex items-center justify-center text-sm font-medium"
+                              >
+                                <FaTimes className="mr-2" /> Отменить
+                              </button>
+                            </>
+                          )}
+                          {app.status === 'confirmed' && (
+                            <>
+                              <button
+                                onClick={() => updateStatus(app.id, 'completed')}
+                                className="px-4 py-2 bg-gray-700 text-white rounded-xl hover:bg-gray-800 transition-colors flex items-center justify-center text-sm font-medium"
+                              >
+                                <FaCheckCircle className="mr-2" /> Завершить прием
+                              </button>
+                              <button
+                                onClick={() => openMeetingModal(app)}
+                                className="px-4 py-2.5 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition-all flex items-center justify-center text-sm font-medium shadow-md"
+                              >
+                                <FaVideo className="mr-2" /> Создать видеовстречу
+                              </button>
+                            </>
+                          )}
+                          {app.status === 'completed' && (
+                            <div className="text-center p-2 text-gray-500 text-sm">
+                              Прием завершен
+                            </div>
+                          )}
+                          {app.status === 'cancelled' && (
+                            <div className="text-center p-2 text-red-500 text-sm">
+                              Прием отменен
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        ) : meetings.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">Нет созданных встреч</div>
-        ) : (
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="p-3 text-left">Тема</th>
-                <th className="p-3 text-left">Дата</th>
-                <th className="p-3 text-left">Статус</th>
-                <th className="p-3 text-left">Действия</th>
-              </tr>
-            </thead>
-            <tbody>
-              {meetings.map(meeting => (
-                <tr key={meeting.id} className="border-t hover:bg-gray-50">
-                  <td className="p-3">
-                    <div className="font-medium">{meeting.topic || 'Консультация'}</div>
-                    {meeting.patientEmail && (
-                      <div className="text-sm text-gray-500">{meeting.patientEmail}</div>
-                    )}
-                  </td>
-                  <td className="p-3">
-                    {formatDateTime(meeting.scheduledTime || meeting.createdAt)}
-                  </td>
-                  <td className="p-3">
-                    <span className={`px-2 py-1 rounded text-sm ${getMeetingStatusColor(meeting.status)}`}>
-                      {getMeetingStatusText(meeting.status)}
-                    </span>
-                  </td>
-                  <td className="p-3">
-                    <div className="flex items-center space-x-2">
-                      {meeting.status === 'SCHEDULED' && (
-                        <button
-                          onClick={() => updateMeetingStatus(meeting.id, 'ACTIVE')}
-                          className="text-green-600 hover:text-green-800 text-sm"
-                        >
-                          Начать
-                        </button>
-                      )}
-                      {meeting.status === 'ACTIVE' && (
-                        <button
-                          onClick={() => updateMeetingStatus(meeting.id, 'COMPLETED')}
-                          className="text-gray-600 hover:text-gray-800 text-sm"
-                        >
-                          Завершить
-                        </button>
-                      )}
-                      {meeting.meetingUrl && (
-                        <>
-                          <button
-                            onClick={() => window.open(meeting.meetingUrl, '_blank')}
-                            className="text-blue-600 hover:text-blue-800 text-sm flex items-center"
-                          >
-                            <FaVideo className="mr-1" /> Присоединиться
-                          </button>
-                          <button
-                            onClick={() => navigator.clipboard.writeText(meeting.meetingUrl)}
-                            className="text-gray-600 hover:text-gray-800"
-                            title="Копировать ссылку"
-                          >
-                            <FaCopy size={14} />
-                          </button>
-                        </>
+        </div>
+
+        {/* Правая колонка: Видеовстречи - ФИКСИРОВАННАЯ ВЫСОТА С ПРОКРУТКОЙ */}
+        <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden flex flex-col" style={{ height: '700px' }}>
+          <div className="p-6 border-b border-gray-100 flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <div className="p-2.5 bg-purple-50 rounded-xl mr-3">
+                  <FaVideo className="text-xl text-purple-600" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-800">Видеовстречи</h2>
+                  <p className="text-sm text-gray-500">Созданные консультации</p>
+                </div>
+              </div>
+              {meetingsLoading && (
+                <FaSpinner className="animate-spin text-blue-600" />
+              )}
+            </div>
+          </div>
+
+          <div className="p-4 flex-grow overflow-y-auto">
+            {meetingsLoading ? (
+              <div className="py-12 text-center">
+                <FaSpinner className="animate-spin mx-auto text-3xl text-purple-600 mb-4" />
+                <p className="text-gray-600">Загрузка встреч...</p>
+              </div>
+            ) : meetings.length === 0 ? (
+              <div className="py-12 text-center">
+                <div className="text-gray-400 mb-3">
+                  <FaVideo className="text-4xl mx-auto" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-700 mb-2">Нет встреч</h3>
+                <p className="text-gray-500">Создайте первую видеовстречу для пациента</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {meetings.map(meeting => (
+                  <div key={meeting.id} className="bg-gray-50 rounded-xl p-4 hover:bg-purple-50 transition-all duration-200 border border-gray-100">
+                    <div className="mb-3">
+                      <h3 className="font-bold text-gray-800 text-lg mb-1">{meeting.topic || 'Консультация'}</h3>
+                      {meeting.patientEmail && (
+                        <p className="text-gray-600 text-sm flex items-center">
+                          <FaEnvelope className="mr-1.5 text-gray-400" size={12} /> {meeting.patientEmail}
+                        </p>
                       )}
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+                    
+                    <div className="flex flex-wrap items-center justify-between mb-3">
+                      <div className="flex items-center text-gray-600 text-sm mb-2 md:mb-0">
+                        <FaClock className="mr-1.5 text-gray-400" />
+                        <span>{formatDateTime(meeting.scheduledTime || meeting.createdAt)}</span>
+                      </div>
+                      
+                      <span className={`px-3 py-1.5 rounded-lg text-sm font-medium ${getMeetingStatusColor(meeting.status)}`}>
+                        {getMeetingStatusText(meeting.status)}
+                      </span>
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-2">
+                      {meeting.status === 'SCHEDULED' && (
+                        <>
+                          <button
+                            onClick={() => updateMeetingStatus(meeting.id, 'ACTIVE')}
+                            className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors flex items-center text-sm font-medium"
+                          >
+                            <FaPlay className="mr-2" /> Начать встречу
+                          </button>
+                          {meeting.meetingUrl && (
+                            <button
+                              onClick={() => window.open(meeting.meetingUrl, '_blank')}
+                              className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center text-sm font-medium"
+                            >
+                              <FaVideo className="mr-2" /> Присоединиться
+                            </button>
+                          )}
+                        </>
+                      )}
+                      {meeting.status === 'ACTIVE' && (
+                        <>
+                          <button
+                            onClick={() => updateMeetingStatus(meeting.id, 'COMPLETED')}
+                            className="px-4 py-2 bg-gray-700 text-white rounded-xl hover:bg-gray-800 transition-colors flex items-center text-sm font-medium"
+                          >
+                            <FaStop className="mr-2" /> Завершить
+                          </button>
+                          {meeting.meetingUrl && (
+                            <>
+                              <button
+                                onClick={() => window.open(meeting.meetingUrl, '_blank')}
+                                className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors flex items-center text-sm font-medium"
+                              >
+                                <FaVideo className="mr-2" /> Присоединиться
+                              </button>
+                              <button
+                                onClick={() => navigator.clipboard.writeText(meeting.meetingUrl)}
+                                className="px-4 py-2 bg-gray-600 text-white rounded-xl hover:bg-gray-700 transition-colors flex items-center text-sm font-medium"
+                                title="Копировать ссылку"
+                              >
+                                <FaShare className="mr-2" /> Поделиться
+                              </button>
+                            </>
+                          )}
+                        </>
+                      )}
+                      {meeting.status === 'COMPLETED' && meeting.meetingUrl && (
+                        <button
+                          onClick={() => window.open(meeting.meetingUrl, '_blank')}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center text-sm font-medium"
+                        >
+                          <FaVideo className="mr-2" /> Открыть запись
+                        </button>
+                      )}
+                      {meeting.status === 'CANCELLED' && (
+                        <div className="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium">
+                          Встреча отменена
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Модалка создания встречи */}
       {showMeetingModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full">
-            <div className="p-6">
-              <h2 className="text-xl font-bold mb-4 flex items-center">
-                <FaVideo className="mr-2 text-purple-600" />
-                {creatingMeeting ? 'Создание встречи...' : 'Встреча создана'}
-              </h2>
-              
-              <div className="mb-4">
-                <p className="font-medium mb-1">Пациент:</p>
-                <p className="text-gray-700">{selectedAppointment?.patientName}</p>
-              </div>
-              
-              {creatingMeeting ? (
-                <div className="text-center py-8">
-                  <FaSpinner className="animate-spin mx-auto text-3xl text-blue-600 mb-4" />
-                  <p>Создание видеовстречи...</p>
-                </div>
-              ) : meetingData ? (
-                <>
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium mb-2">Ссылка на встречу:</label>
-                    <div className="flex">
-                      <input
-                        readOnly
-                        value={meetingData.meetingUrl}
-                        className="flex-1 border rounded-l px-3 py-2 text-sm"
-                      />
-                      <button
-                        onClick={copyLink}
-                        className="bg-gray-800 text-white px-3 rounded-r flex items-center"
-                      >
-                        <FaCopy />
-                      </button>
-                    </div>
-                    {meetingData.message && (
-                      <p className="text-sm text-green-600 mt-1">{meetingData.message}</p>
-                    )}
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl transform transition-all">
+            <div className="p-6 border-b border-gray-100">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="p-2 bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl mr-3">
+                    <FaVideo className="text-xl text-white" />
                   </div>
-                  
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-800">
+                      {sendingInvite ? 'Создание встречи...' : meetingData?.meetingUrl ? 'Встреча создана!' : 'Новая видеовстреча'}
+                    </h2>
+                    <p className="text-sm text-gray-500">Отправьте приглашение пациенту</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowMeetingModal(false);
+                    setMeetingData(null);
+                    setInviteEmail('');
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
+                  disabled={sendingInvite}
+                >
+                  <FaTimes className="text-gray-500" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              {/* Информация о пациенте */}
+              <div className="bg-blue-50 rounded-xl p-4 mb-6 border border-blue-100">
+                <div className="flex items-center mb-3">
+                  <div className="p-2 bg-white rounded-lg mr-3 border border-blue-200">
+                    <FaUserInjured className="text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-800 text-lg">{selectedAppointment?.patientName}</h3>
+                    <p className="text-gray-600 text-sm">Пациент</p>
+                  </div>
+                </div>
+                
+                {selectedAppointment?.patientEmail && (
+                  <div className="flex items-center text-gray-700">
+                    <FaEnvelope className="mr-2 text-gray-400" />
+                    <span className="text-sm">Записанный email: <strong>{selectedAppointment.patientEmail}</strong></span>
+                  </div>
+                )}
+              </div>
+
+              {sendingInvite ? (
+                <div className="text-center py-10">
+                  <div className="relative inline-block">
+                    <FaSpinner className="animate-spin text-4xl text-purple-600 mb-4" />
+                    <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full blur-lg opacity-30"></div>
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-800 mb-2">Создание встречи</h3>
+                  <p className="text-gray-600">Отправляем приглашение пациенту...</p>
+                </div>
+              ) : meetingData?.meetingUrl ? (
+                <>
+                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-5 mb-6 border border-green-200">
+                    <div className="flex items-center mb-3">
+                      <div className="p-2 bg-green-100 rounded-lg mr-3">
+                        <FaCheck className="text-green-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-gray-800 text-lg">Приглашение отправлено!</h3>
+                        <p className="text-gray-600 text-sm">Ссылка направлена пациенту</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 p-3 bg-white rounded-lg border border-green-100">
+                      <div className="flex items-center text-green-700">
+                        <FaPaperPlane className="mr-2" />
+                        <span className="text-sm">Отправлено на: <strong className="font-medium">{inviteEmail}</strong></span>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="mb-6">
-                    <label className="block text-sm font-medium mb-2 flex items-center">
-                      <FaEnvelope className="mr-2 text-blue-600" />
-                      Отправить приглашение на email:
+                    <label className="block text-sm font-medium text-gray-700 mb-3 flex items-center">
+                      <FaShare className="mr-2 text-gray-400" />
+                      Ссылка на видеовстречу:
                     </label>
                     <div className="flex">
+                      <div className="flex-1 relative">
+                        <input
+                          readOnly
+                          value={meetingData.meetingUrl}
+                          className="w-full border-2 border-gray-200 rounded-l-xl px-4 py-3 pr-12 text-sm bg-gray-50 focus:outline-none focus:border-purple-500"
+                        />
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                          <FaLink className="text-gray-400" />
+                        </div>
+                      </div>
+                      <button
+                        onClick={copyLink}
+                        className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-5 rounded-r-xl hover:from-blue-700 hover:to-blue-800 transition-all flex items-center font-medium shadow-md"
+                      >
+                        <FaCopy className="mr-2" /> Копировать
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <button
+                      onClick={() => window.open(meetingData.meetingUrl, '_blank')}
+                      className="bg-gradient-to-r from-green-600 to-emerald-600 text-white py-3.5 rounded-xl hover:from-green-700 hover:to-emerald-700 transition-all flex items-center justify-center font-medium shadow-md"
+                    >
+                      <FaVideo className="mr-2" /> Присоединиться к встрече
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowMeetingModal(false);
+                        setMeetingData(null);
+                        setInviteEmail('');
+                      }}
+                      className="bg-gray-100 text-gray-700 py-3.5 rounded-xl hover:bg-gray-200 transition-all flex items-center justify-center font-medium border border-gray-200"
+                    >
+                      Закрыть
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-3 flex items-center">
+                      <FaEnvelope className="mr-2 text-blue-500" />
+                      Email пациента для приглашения:
+                    </label>
+                    <div className="relative">
                       <input
                         type="email"
                         value={inviteEmail}
                         onChange={(e) => setInviteEmail(e.target.value)}
-                        placeholder="email@example.com"
-                        className="flex-1 border rounded-l px-3 py-2 text-sm"
+                        placeholder="Введите email пациента..."
+                        className="w-full border-2 border-gray-200 rounded-xl px-4 py-3.5 pl-12 text-sm focus:outline-none focus:border-purple-500 hover:border-gray-300 transition-colors"
                       />
-                      <button
-                        onClick={sendInvite}
-                        disabled={sendingInvite || !inviteEmail}
-                        className={`px-4 rounded-r flex items-center ${
-                          sendingInvite || !inviteEmail
-                            ? 'bg-gray-400 text-gray-200'
-                            : 'bg-blue-600 text-white hover:bg-blue-700'
-                        }`}
-                      >
-                        {sendingInvite ? <FaSpinner className="animate-spin" /> : 'Отправить'}
-                      </button>
+                      <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
+                        <FaEnvelope className="text-gray-400" />
+                      </div>
                     </div>
                   </div>
-                  
+
+                  <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 mb-6 border border-blue-100">
+                    <div className="flex items-start">
+                      <FaExclamationTriangle className="text-blue-500 mt-0.5 mr-3 flex-shrink-0" />
+                      <div>
+                        <h4 className="font-medium text-gray-800 text-sm mb-1">Как это работает?</h4>
+                        <p className="text-gray-600 text-xs">
+                          1. Введите email пациента<br/>
+                          2. Система создаст встречу и отправит приглашение<br/>
+                          3. Вы получите ссылку для присоединения к консультации
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
                   <button
-                    onClick={() => window.open(meetingData.meetingUrl, '_blank')}
-                    className="w-full bg-green-600 text-white py-2 rounded mb-3 hover:bg-green-700 flex items-center justify-center"
+                    onClick={sendInvite}
+                    disabled={!inviteEmail || !inviteEmail.includes('@') || sendingInvite}
+                    className={`w-full py-3.5 rounded-xl font-medium flex items-center justify-center transition-all shadow-md ${!inviteEmail || !inviteEmail.includes('@') || sendingInvite
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 hover:shadow-lg'
+                    }`}
                   >
-                    <FaVideo className="mr-2" />
-                    Присоединиться к встрече
+                    {sendingInvite ? (
+                      <>
+                        <FaSpinner className="animate-spin mr-2" /> Создание...
+                      </>
+                    ) : (
+                      <>
+                        <FaPaperPlane className="mr-2" /> Создать встречу и отправить приглашение
+                      </>
+                    )}
                   </button>
                 </>
-              ) : (
-                <div className="text-center py-8 text-red-600">
-                  Ошибка создания встречи. Попробуйте еще раз.
-                </div>
               )}
-              
-              <button
-                onClick={() => setShowMeetingModal(false)}
-                className="w-full border border-gray-300 py-2 rounded text-gray-700 hover:bg-gray-50"
-                disabled={creatingMeeting}
-              >
-                Закрыть
-              </button>
             </div>
           </div>
         </div>
