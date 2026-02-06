@@ -168,10 +168,6 @@ function Layout() {
                       <GiStethoscope className="mr-2" />
                       Дәрігерлер
                     </NavLink>
-                    <NavLink to="/audio-call" className={linkClass}>
-                      <GiStethoscope className="mr-2" />
-                      Аудиоқоңырау
-                    </NavLink>
                     <NavLink to="/ai" className={linkClass}>
                       <FaRobot className="mr-2" />
                       AI Көмекші
