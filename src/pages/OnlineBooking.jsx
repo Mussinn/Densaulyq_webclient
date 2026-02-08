@@ -1,19 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
+import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import api from '../../utils/api';
 
 const OnlineBooking = () => {
+  const [searchParams] = useSearchParams();
   const [doctors, setDoctors] = useState([]);
+  const [filteredDoctors, setFilteredDoctors] = useState([]);
   const [selectedDoctor, setSelectedDoctor] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [availableSlots, setAvailableSlots] = useState([]);
-  const [currentPatient, setCurrentPatient] = useState(null); // Изменено на patient
+  const [currentPatient, setCurrentPatient] = useState(null);
   const [allAppointments, setAllAppointments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingAppointments, setLoadingAppointments] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [specialtyFilter, setSpecialtyFilter] = useState('');
   
   const { token } = useSelector((state) => state.token);
 
@@ -35,6 +39,15 @@ const OnlineBooking = () => {
       
       if (doctorsResponse.data && Array.isArray(doctorsResponse.data)) {
         setDoctors(doctorsResponse.data);
+        
+        // Проверяем URL параметр specialist
+        const specialistParam = searchParams.get('specialist');
+        if (specialistParam) {
+          setSpecialtyFilter(specialistParam);
+          filterDoctorsBySpecialty(doctorsResponse.data, specialistParam);
+        } else {
+          setFilteredDoctors(doctorsResponse.data);
+        }
       }
       
       // Загружаем текущего пациента
@@ -51,6 +64,35 @@ const OnlineBooking = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Фильтрация докторов по специальности
+  const filterDoctorsBySpecialty = (doctorsList, specialty) => {
+    if (!specialty) {
+      setFilteredDoctors(doctorsList);
+      return;
+    }
+
+    const filtered = doctorsList.filter(doctor => 
+      doctor.specialty && 
+      doctor.specialty.toLowerCase().includes(specialty.toLowerCase())
+    );
+    
+    setFilteredDoctors(filtered);
+    console.log(`Фильтр по специальности "${specialty}": найдено ${filtered.length} докторов`);
+  };
+
+  // Обработчик изменения фильтра
+  const handleSpecialtyFilterChange = (value) => {
+    setSpecialtyFilter(value);
+    filterDoctorsBySpecialty(doctors, value);
+    setSelectedDoctor(null); // Сбрасываем выбранного доктора
+  };
+
+  // Очистка фильтра
+  const clearFilter = () => {
+    setSpecialtyFilter('');
+    setFilteredDoctors(doctors);
   };
 
   // 2. ЗАГРУЗКА ВСЕХ APPOINTMENTS
@@ -101,7 +143,7 @@ const OnlineBooking = () => {
       
       const payload = {
         doctorId: selectedDoctor.doctorId,
-        patientId: currentPatient.patientId, // Используем patientId
+        patientId: currentPatient.patientId,
         appointmentDate: appointmentDateTime.toISOString(),
         status: "scheduled"
       };
@@ -221,7 +263,7 @@ const OnlineBooking = () => {
 
   // Обработчики
   const handleDoctorSelect = async (doctorId) => {
-    const doctor = doctors.find(d => d.doctorId === Number(doctorId));
+    const doctor = filteredDoctors.find(d => d.doctorId === Number(doctorId));
     setSelectedDoctor(doctor);
     setSelectedDate(new Date());
     
@@ -271,6 +313,9 @@ const OnlineBooking = () => {
       generateTimeSlots();
     }
   }, [selectedDoctor, selectedDate, allAppointments]);
+
+  // Получаем уникальные специальности для выпадающего списка
+  const uniqueSpecialties = [...new Set(doctors.map(d => d.specialty).filter(Boolean))];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-100">
@@ -325,52 +370,122 @@ const OnlineBooking = () => {
             <h2 className="text-2xl font-semibold text-blue-600 mb-6">
               1. Дәрігерді таңдау
             </h2>
+
+            {/* Фильтр по специальности */}
+            {uniqueSpecialties.length > 0 && (
+              <div className="mb-6">
+                <label className="block text-gray-700 font-medium mb-3">
+                  Мамандық бойынша сүзу
+                </label>
+                <div className="flex gap-3">
+                  <select
+                    value={specialtyFilter}
+                    onChange={(e) => handleSpecialtyFilterChange(e.target.value)}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Барлық мамандықтар</option>
+                    {uniqueSpecialties.map((specialty, index) => (
+                      <option key={index} value={specialty}>
+                        {specialty}
+                      </option>
+                    ))}
+                  </select>
+                  
+                  {specialtyFilter && (
+                    <button
+                      onClick={clearFilter}
+                      className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition flex items-center"
+                    >
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Тазалау
+                    </button>
+                  )}
+                </div>
+                
+                {specialtyFilter && (
+                  <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-800">
+                      <span className="font-semibold">Сүзгі:</span> {specialtyFilter} 
+                      <span className="ml-2">({filteredDoctors.length} дәрігер табылды)</span>
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
             
             {loading ? (
               <div className="text-center py-8">
                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                 <p className="mt-2 text-gray-600">Дәрігерлер жүктелуде...</p>
               </div>
-            ) : doctors.length === 0 ? (
-              <p className="text-gray-600 text-center py-4">Қолжетімді дәрігерлер жоқ</p>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {doctors.map((doctor) => (
-                  <motion.div
-                    key={doctor.doctorId}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className={`p-4 border rounded-lg cursor-pointer transition-all ${
-                      selectedDoctor?.doctorId === doctor.doctorId
-                        ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
-                        : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'
-                    }`}
-                    onClick={() => handleDoctorSelect(doctor.doctorId)}
+            ) : filteredDoctors.length === 0 ? (
+              <div className="text-center py-8">
+                <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="text-gray-600 text-lg">
+                  {specialtyFilter 
+                    ? `"${specialtyFilter}" мамандығы бойынша дәрігерлер табылмады`
+                    : 'Қолжетімді дәрігерлер жоқ'
+                  }
+                </p>
+                {specialtyFilter && (
+                  <button
+                    onClick={clearFilter}
+                    className="mt-4 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
                   >
-                    <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                        <span className="text-blue-600 font-bold">
-                          {doctor.user.firstName?.charAt(0)}{doctor.user.lastName?.charAt(0)}
-                        </span>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-gray-800">
-                          {doctor.user.firstName} {doctor.user.lastName}
-                        </p>
-                        <p className="text-gray-600 text-sm">{doctor.specialty}</p>
-                        <div className="flex items-center mt-1">
-                          <div className={`w-2 h-2 rounded-full mr-2 ${
-                            doctor.user.online ? 'bg-green-500' : 'bg-gray-400'
-                          }`}></div>
-                          <p className="text-xs text-gray-500">
-                            {doctor.user.online ? '🟢 Онлайн' : '⚫ Оффлайн'}
+                    Сүзгіні алып тастау
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="mb-4 text-sm text-gray-600">
+                  Табылды: <span className="font-semibold">{filteredDoctors.length}</span> дәрігер
+                  {doctors.length !== filteredDoctors.length && (
+                    <span className="ml-2 text-gray-500">(барлығы: {doctors.length})</span>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredDoctors.map((doctor) => (
+                    <motion.div
+                      key={doctor.doctorId}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                        selectedDoctor?.doctorId === doctor.doctorId
+                          ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
+                          : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'
+                      }`}
+                      onClick={() => handleDoctorSelect(doctor.doctorId)}
+                    >
+                      <div className="flex items-center space-x-4">
+                        <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                          <span className="text-blue-600 font-bold">
+                            {doctor.user.firstName?.charAt(0)}{doctor.user.lastName?.charAt(0)}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="font-semibold text-gray-800">
+                            {doctor.user.firstName} {doctor.user.lastName}
                           </p>
+                          <p className="text-blue-600 text-sm font-medium">{doctor.specialty}</p>
+                          <div className="flex items-center mt-1">
+                            <div className={`w-2 h-2 rounded-full mr-2 ${
+                              doctor.user.online ? 'bg-green-500' : 'bg-gray-400'
+                            }`}></div>
+                            <p className="text-xs text-gray-500">
+                              {doctor.user.online ? '🟢 Онлайн' : '⚫ Оффлайн'}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
 
@@ -388,7 +503,7 @@ const OnlineBooking = () => {
                     <p className="font-semibold text-gray-800">
                       {selectedDoctor.user.firstName} {selectedDoctor.user.lastName}
                     </p>
-                    <p className="text-gray-600">{selectedDoctor.specialty}</p>
+                    <p className="text-blue-600 font-medium">{selectedDoctor.specialty}</p>
                     <p className="text-sm text-gray-500 mt-1">
                       Дәрігер ID: {selectedDoctor.doctorId}
                     </p>

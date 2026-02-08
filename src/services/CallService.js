@@ -46,9 +46,9 @@ class CallService {
       }
 
       console.log('🔗 Подключение WS для пользователя:', this.userId);
-
+// http://192.168.8.9:8080/
       this.client = new Client({
-        webSocketFactory: () => new SockJS('http://localhost:8080/ws-call'),
+        webSocketFactory: () => new SockJS('http://192.168.8.9:8080/ws-call'),
         connectHeaders: {
           Authorization: `Bearer ${token}`,
           'X-User-Id': this.userId

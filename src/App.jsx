@@ -17,14 +17,13 @@ import MedicalAIAssistantPage from "./pages/MedicalAIAssistantPage";
 import DermAIApp from "./pages/DermAIApp";
 import DoctorsPage from "./pages/DoctorsPage";
 import callService from "./services/CallService";
-import AuthDebug from "./components/AuthDebug";
 import IncomingCallModal from "./components/IncomingCallModal";
 import PersonalProfile from "./pages/PersonalProfile";
 import OnlineBooking from "./pages/OnlineBooking";
 import DoctorAppointments from "./pages/DoctorAppointments";
 import MedicalTestsPage from "./pages/MedicalTestsPage";
 import DoctorConsultations from "./pages/DoctorConsultations"; 
-import DoctorMessenger from "./pages/DoctorMessenger";
+import Messenger from "./pages/DoctorMessenger";
 
 function App() {
   const { token: authToken, user } = useSelector((state) => state.token);
@@ -189,8 +188,7 @@ function App() {
         />
 
         <Route element={<Layout />}>
-        DoctorMessenger
-        <Route path="/doctor-messenger" element={<PrivateRoute><DoctorMessenger /></PrivateRoute>} />
+        <Route path="/messenger" element={<PrivateRoute><Messenger /></PrivateRoute>} />
         <Route path="/doctor-consultations" element={<PrivateRoute><DoctorConsultations /></PrivateRoute>} />
         <Route path="/medical-tests" element={<PrivateRoute><MedicalTestsPage /></PrivateRoute>} />
           <Route path="/doctor-appointments" element={<PrivateRoute><DoctorAppointments /></PrivateRoute>} />
@@ -211,9 +209,7 @@ function App() {
         </Route>
       </Routes>
 
-      <AuthDebug />
-
-      {/* Индикатор состояния WebSocket */}
+      {/* Индикатор состояния WebSocket
       <div className="fixed bottom-4 right-4 z-50">
         <div className={`
           flex items-center px-3 py-2 rounded-lg shadow-lg text-sm font-medium
@@ -251,7 +247,7 @@ function App() {
             </>
           )}
         </div>
-      </div>
+      </div> */}
 
       {/* Глобальная модалка входящего звонка — видна на любой странице */}
       {incomingCall && (

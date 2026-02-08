@@ -1,16 +1,16 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import api from "../../utils/api";
 import { useSelector } from "react-redux";
 import { FaRobot, FaVideo, FaStethoscope, FaHeartbeat, FaThermometerHalf, FaHeadSideVirus } from "react-icons/fa";
 import { GiBrain, GiMedicines, GiHealthNormal, GiHealing } from "react-icons/gi";
-import { MdHealthAndSafety, MdEmergency, MdLocalHospital } from "react-icons/md";
+import { MdHealthAndSafety, MdLocalHospital } from "react-icons/md";
+import aiDatabase from '../components/aiMedicalDatabase.json';
 
 const MedicalAIAssistantPage = () => {
   const [messages, setMessages] = useState([
     {
       id: 1,
-      text: "Сәлем! Мен сіздің жеке медициналық көмекшіңіз Densaulyq AI. Сізді не мазалайтынын сипаттаңыз, мен жеделдік дәрежесін анықтауға және әрі қарай не істеу керектігін көрсетуге көмектесемін. Мысалы: 'Менің басым ауырып, сәл жүрегім айнып тұр' деп жаза аласыз.",
+      text: getTimeBasedGreeting(),
       sender: "ai",
       timestamp: new Date(),
       type: "welcome"
@@ -22,25 +22,90 @@ const MedicalAIAssistantPage = () => {
   const [emergencyCheck, setEmergencyCheck] = useState(null);
   const [followUpQuestions, setFollowUpQuestions] = useState([]);
   const [showQuestions, setShowQuestions] = useState(false);
-  const [userInfo] = useState({
-    name: "Қанат",
-    age: 28,
-    bloodType: "B+"
-  });
   
   const { token, user } = useSelector((state) => state.token);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   
-  // Прокрутка к последнему сообщению
+  // Функция для определения времени суток
+  function getTimeBasedGreeting() {
+    const hour = new Date().getHours();
+    if (hour < 12) return aiDatabase.timeBasedGreetings.morning;
+    if (hour < 17) return aiDatabase.timeBasedGreetings.afternoon;
+    if (hour < 21) return aiDatabase.timeBasedGreetings.evening;
+    return aiDatabase.timeBasedGreetings.night;
+  }
+  
+  // Прокрутка к последнему сообщению (только при добавлении новых сообщений)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Не прокручиваем при первой загрузке (когда только приветственное сообщение)
+    if (messages.length > 1) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages]);
   
   // Фокус на поле ввода при загрузке
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+  
+  // Функция для анализа симптомов на основе ключевых слов
+  const analyzeSymptoms = (text) => {
+    const lowerText = text.toLowerCase();
+    let matchedSymptom = null;
+    let maxMatches = 0;
+    
+    // Проходим по всем симптомам в базе
+    Object.entries(aiDatabase.symptomDatabase).forEach(([key, symptom]) => {
+      let matches = 0;
+      
+      // Считаем совпадения ключевых слов
+      symptom.keywords.forEach(keyword => {
+        if (lowerText.includes(keyword)) {
+          matches++;
+        }
+      });
+      
+      // Если нашли больше совпадений
+      if (matches > maxMatches) {
+        maxMatches = matches;
+        matchedSymptom = { ...symptom, key };
+      }
+    });
+    
+    return matchedSymptom;
+  };
+  
+  // Проверка на экстренный случай
+  const checkEmergency = (text) => {
+    const lowerText = text.toLowerCase();
+    
+    // Проверяем критические триггеры
+    for (const trigger of aiDatabase.emergencyTriggers.critical) {
+      if (lowerText.includes(trigger)) {
+        return {
+          isEmergency: true,
+          level: 'critical',
+          reason: trigger,
+          recommendation: '🚨 ДЕРЕУ 103 НЕМЕСЕ 112 ҚОҢЫРАУ ШАЛЫҢЫЗ!'
+        };
+      }
+    }
+    
+    // Проверяем высокоприоритетные триггеры
+    for (const trigger of aiDatabase.emergencyTriggers.high) {
+      if (lowerText.includes(trigger)) {
+        return {
+          isEmergency: true,
+          level: 'high',
+          reason: trigger,
+          recommendation: 'Дәрігерге тез арада жүгініңіз немесе 103-ке қоңырау шалыңыз!'
+        };
+      }
+    }
+    
+    return { isEmergency: false };
+  };
   
   const handleSendMessage = async () => {
     if (!inputText.trim()) return;
@@ -54,22 +119,21 @@ const MedicalAIAssistantPage = () => {
     };
     
     setMessages([...messages, userMessage]);
+    const currentInput = inputText;
     setInputText("");
     setIsAnalyzing(true);
     
+    // Имитация задержки анализа (1-2 секунды)
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
     try {
       // 1. Проверка на экстренный случай
-      const emergencyResponse = await api.post("/api/ai-assistant/emergency-check", {
-        symptoms: inputText,
-      });
+      const emergency = checkEmergency(currentInput);
       
-      setEmergencyCheck(emergencyResponse.data);
-      
-      // Если экстренный случай - сразу показываем предупреждение
-      if (emergencyResponse.data.isEmergency) {
+      if (emergency.isEmergency) {
         const emergencyMessage = {
           id: messages.length + 2,
-          text: `⚠️ Назар аударыңыз! Қауіпті симптомдар анықталды: "${emergencyResponse.data.emergencyReason}".\n\n🚑 ${emergencyResponse.data.recommendation}\n\nДәрігерге дереу жүгініңіз!`,
+          text: `⚠️ НАЗАР АУДАРЫҢЫЗ! Қауіпті симптомдар анықталды: "${emergency.reason}".\n\n🚑 ${emergency.recommendation}\n\nДәрігерге дереу жүгініңіз!`,
           sender: "ai",
           timestamp: new Date(),
           isEmergency: true,
@@ -80,56 +144,79 @@ const MedicalAIAssistantPage = () => {
         
         // Вибрация для срочных случаев
         if (navigator.vibrate) {
-          navigator.vibrate([200, 100, 200]);
+          navigator.vibrate([200, 100, 200, 100, 200]);
         }
         
         return;
       }
       
       // 2. Анализ симптомов
-      const analysisResponse = await api.post("/api/ai-assistant/analyze-symptoms", {
-        symptoms: inputText,
-      });
+      const symptomMatch = analyzeSymptoms(currentInput);
       
-      setAnalysisResult(analysisResponse.data);
-      
-      // 3. Генерация уточняющих вопросов
-      const questionsResponse = await api.post("/api/ai-assistant/generate-questions", {
-        messages: [inputText],
-      });
-      
-      setFollowUpQuestions(questionsResponse.data.questions || []);
-      
-      // Формируем красивый ответ AI
-      const urgencyLevel = analysisResponse.data.urgencyLevel;
-      const urgencyText = analysisResponse.data.urgencyDescription;
-      const urgencyEmoji = ["🟢", "🟡", "🟠", "🔴", "🚨"][urgencyLevel - 1];
-      
-      let aiResponse = `🔍 **Талдау аяқталды**\n\n`;
-      aiResponse += `${urgencyEmoji} **Жеделдік дәрежесі:** ${urgencyText}\n\n`;
-      
-      if (analysisResponse.data.redFlags.length > 0) {
-        aiResponse += `📌 **Уайымдататын симптомдар:** ${analysisResponse.data.redFlags.join(", ")}\n\n`;
+      if (symptomMatch) {
+        // Проверяем, является ли симптом экстренным
+        if (symptomMatch.isEmergency) {
+          const emergencyMessage = {
+            id: messages.length + 2,
+            text: `⚠️ НАЗАР АУДАРЫҢЫЗ! Бұл өте жедел жағдай!\n\n🚑 ${symptomMatch.recommendations[0]}\n\nДереу медициналық көмек алыңыз!`,
+            sender: "ai",
+            timestamp: new Date(),
+            isEmergency: true,
+          };
+          
+          setMessages(prev => [...prev, emergencyMessage]);
+          setIsAnalyzing(false);
+          
+          if (navigator.vibrate) {
+            navigator.vibrate([200, 100, 200, 100, 200]);
+          }
+          
+          return;
+        }
+        
+        setAnalysisResult(symptomMatch);
+        setFollowUpQuestions(symptomMatch.followUpQuestions || []);
+        
+        // Формируем красивый ответ AI
+        const urgencyEmoji = ["🟢", "🟡", "🟠", "🔴", "🚨"][symptomMatch.urgencyLevel - 1];
+        
+        let aiResponse = `🔍 **Талдау аяқталды**\n\n`;
+        aiResponse += `${urgencyEmoji} **Жеделдік дәрежесі:** ${symptomMatch.urgencyDescription}\n\n`;
+        
+        if (symptomMatch.redFlags && symptomMatch.redFlags.length > 0) {
+          aiResponse += `📌 **Уайымдататын белгілер:**\n${symptomMatch.redFlags.map(f => `• ${f}`).join('\n')}\n\n`;
+        }
+        
+        aiResponse += `🏥 **Мүмкін мән-жайлар:**\n${symptomMatch.possibleConditions.map(c => `• ${c}`).join('\n')}\n\n`;
+        aiResponse += `👨‍⚕️ **Ұсынылатын мамандар:**\n${symptomMatch.recommendedSpecialists.map(s => `• ${s}`).join('\n')}\n\n`;
+        aiResponse += `💡 **Ұсыныстар:**\n${symptomMatch.recommendations.map(r => `• ${r}`).join('\n')}`;
+        
+        const aiMessage = {
+          id: messages.length + 2,
+          text: aiResponse,
+          sender: "ai",
+          timestamp: new Date(),
+          analysis: symptomMatch,
+        };
+        
+        setMessages(prev => [...prev, aiMessage]);
+        
+        // Показываем вопросы через 1 секунду
+        setTimeout(() => {
+          setShowQuestions(true);
+        }, 1000);
+        
+      } else {
+        // Если не нашли точного совпадения
+        const aiMessage = {
+          id: messages.length + 2,
+          text: "Кешіріңіз, мен сіздің симптомдарыңызды дәл түсіне алмадым. Өтінеміз, көбірек мәлімет беріңіз:\n\n• Қай жерде ауырып тұр?\n• Қашан басталды?\n• Қандай қосымша белгілер бар?\n• Температураңыз бар ма?\n\nНемесе жедел үлгілерді пайдаланып көріңіз.",
+          sender: "ai",
+          timestamp: new Date(),
+        };
+        
+        setMessages(prev => [...prev, aiMessage]);
       }
-      
-      aiResponse += `🏥 **Мүмкін мән-жайлар:**\n${analysisResponse.data.possibleConditions.map(c => `• ${c}`).join("\n")}\n\n`;
-      aiResponse += `👨‍⚕️ **Ұсынылатын мамандар:**\n${analysisResponse.data.recommendedSpecialists.map(s => `• ${s}`).join("\n")}\n\n`;
-      aiResponse += `💡 **Әрі қарай не істеу керек:**\n${analysisResponse.data.recommendations.map(r => `• ${r}`).join("\n")}`;
-      
-      const aiMessage = {
-        id: messages.length + 2,
-        text: aiResponse,
-        sender: "ai",
-        timestamp: new Date(),
-        analysis: analysisResponse.data,
-      };
-      
-      setMessages(prev => [...prev, aiMessage]);
-      
-      // Показываем вопросы через 1 секунду
-      setTimeout(() => {
-        setShowQuestions(true);
-      }, 1000);
       
     } catch (error) {
       console.error("Талдау қатесі:", error);
@@ -148,7 +235,7 @@ const MedicalAIAssistantPage = () => {
     }
   };
   
-  const handleQuickQuestion = async (question) => {
+  const handleQuickQuestion = (question) => {
     const quickMessage = {
       id: messages.length + 1,
       text: question.text,
@@ -169,7 +256,7 @@ const MedicalAIAssistantPage = () => {
   const handleBookConsultation = (specialist) => {
     const confirmMessage = `Сіз ${specialist} бейнеконсультациясына жазылуды қалайсыз ба?`;
     if (window.confirm(confirmMessage)) {
-      window.location.href = `/video-conference?specialist=${encodeURIComponent(specialist)}`;
+      window.location.href = `/booking?specialist=${encodeURIComponent(specialist)}`;
     }
   };
   
@@ -197,7 +284,7 @@ const MedicalAIAssistantPage = () => {
       setMessages([
         {
           id: 1,
-          text: "Сәлем! Мен сіздің жеке медициналық көмекшіңіз Densaulyq AI. Сізді не мазалайтынын сипаттаңыз, мен жеделдік дәрежесін анықтауға және әрі қарай не істеу керектігін көрсетуге көмектесемін.",
+          text: getTimeBasedGreeting(),
           sender: "ai",
           timestamp: new Date(),
           type: "welcome"
@@ -272,11 +359,21 @@ const MedicalAIAssistantPage = () => {
                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
-                Сөйлесуді тазалау
+                Тазалау
               </button>
               
               <button
-                onClick={() => window.location.href = "/video-conference"}
+                onClick={handleEmergencyCall}
+                className="px-4 py-2 bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-xl hover:from-red-600 hover:to-orange-600 transition flex items-center shadow-md hover:shadow-lg"
+              >
+                <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
+                </svg>
+                103 - Жедел жәрдем
+              </button>
+              
+              <button
+                onClick={() => window.location.href = "/meet"}
                 className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl hover:from-emerald-600 hover:to-teal-600 transition flex items-center shadow-md hover:shadow-lg"
               >
                 <FaVideo className="w-4 h-4 mr-2" />
@@ -293,8 +390,8 @@ const MedicalAIAssistantPage = () => {
                   <GiBrain className="text-emerald-600 text-xl" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Талдау дәлдігі</p>
-                  <p className="font-semibold text-gray-800">94%</p>
+                  <p className="text-sm text-gray-500">Дерекқор</p>
+                  <p className="font-semibold text-gray-800">10+ симптом</p>
                 </div>
               </div>
             </div>
@@ -308,7 +405,7 @@ const MedicalAIAssistantPage = () => {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Жауап уақыты</p>
-                  <p className="font-semibold text-gray-800">2 сек-тан аз</p>
+                  <p className="font-semibold text-gray-800">1-2 секунд</p>
                 </div>
               </div>
             </div>
@@ -319,8 +416,8 @@ const MedicalAIAssistantPage = () => {
                   <MdHealthAndSafety className="text-violet-600 text-xl" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Расталған деректер</p>
-                  <p className="font-semibold text-gray-800">Медициналық дерекқорлар</p>
+                  <p className="text-sm text-gray-500">Қауіпсіздік</p>
+                  <p className="font-semibold text-gray-800">100% құпия</p>
                 </div>
               </div>
             </div>
@@ -328,10 +425,8 @@ const MedicalAIAssistantPage = () => {
         </motion.header>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Сол жақ баған - Ақпарат және жедел әрекеттер */}
+          {/* Сол жақ баған - Жедел үлгілер */}
           <div className="lg:col-span-1 space-y-6">
-
-            {/* Жедел үлгілер */}
             <motion.div 
               variants={fadeIn}
               initial="hidden"
@@ -350,15 +445,15 @@ const MedicalAIAssistantPage = () => {
                   <button
                     key={index}
                     onClick={() => handleQuickTemplate(template)}
-                    className={`w-full text-left p-4 rounded-xl border transition-all duration-200 hover:scale-[1.02] hover:shadow-md bg-gradient-to-r from-${template.color}-50 to-${template.color}-100 border-${template.color}-200 text-gray-700`}
+                    className="w-full text-left p-4 rounded-xl border transition-all duration-200 hover:scale-[1.02] hover:shadow-md bg-gradient-to-r from-gray-50 to-white border-gray-200 text-gray-700 hover:border-emerald-300"
                   >
                     <div className="flex items-center">
-                      <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center mr-3 shadow-sm">
+                      <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center mr-3 shadow-sm">
                         <span className="text-xl">{template.emoji}</span>
                       </div>
                       <div>
                         <span className="font-medium block">{template.text}</span>
-                        <span className="text-xs text-gray-500 mt-1">Басқа белгілерді қосыңыз</span>
+                        <span className="text-xs text-gray-500 mt-1">Басып таңдаңыз</span>
                       </div>
                     </div>
                   </button>
@@ -377,7 +472,7 @@ const MedicalAIAssistantPage = () => {
                     <div className="relative">
                       <div className="w-14 h-14 bg-gradient-to-br from-white/20 to-white/10 rounded-2xl flex items-center justify-center mr-4 backdrop-blur-sm border border-white/20">
                         <FaRobot className="text-white text-2xl" />
-                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full border-2 border-emerald-700"></div>
+                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full border-2 border-emerald-700 animate-pulse"></div>
                       </div>
                     </div>
                     <div>
@@ -386,8 +481,8 @@ const MedicalAIAssistantPage = () => {
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <div className="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-sm text-white">
-                      <span className="w-2 h-2 bg-green-400 rounded-full inline-block mr-2"></span>
+                    <div className="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-sm text-white flex items-center">
+                      <span className="w-2 h-2 bg-green-400 rounded-full inline-block mr-2 animate-pulse"></span>
                       Онлайн
                     </div>
                   </div>
@@ -408,7 +503,7 @@ const MedicalAIAssistantPage = () => {
                     >
                       <div className={`flex items-end ${message.sender === 'user' ? 'justify-end' : ''}`}>
                         {message.sender === 'ai' && (
-                          <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-full flex items-center justify-center mr-3 shadow-md">
+                          <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-full flex items-center justify-center mr-3 shadow-md flex-shrink-0">
                             <span className="text-white text-xs font-bold">AI</span>
                           </div>
                         )}
@@ -431,7 +526,7 @@ const MedicalAIAssistantPage = () => {
                         </div>
                         
                         {message.sender === 'user' && (
-                          <div className="w-8 h-8 bg-gradient-to-br from-gray-600 to-gray-700 rounded-full flex items-center justify-center ml-3 shadow-md">
+                          <div className="w-8 h-8 bg-gradient-to-br from-gray-600 to-gray-700 rounded-full flex items-center justify-center ml-3 shadow-md flex-shrink-0">
                             <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                             </svg>
@@ -454,9 +549,9 @@ const MedicalAIAssistantPage = () => {
                         <div className="bg-gradient-to-r from-gray-100 to-white border border-gray-200 rounded-2xl rounded-bl-none p-4 shadow-sm">
                           <div className="flex items-center space-x-3">
                             <div className="flex space-x-1">
-                              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse delay-150"></div>
-                              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse delay-300"></div>
+                              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce"></div>
+                              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                             </div>
                             <span className="text-gray-600 font-medium">Симптомдарды талдауда...</span>
                           </div>
@@ -506,7 +601,7 @@ const MedicalAIAssistantPage = () => {
                       value={inputText}
                       onChange={(e) => setInputText(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && !isAnalyzing && handleSendMessage()}
-                      placeholder="Симптомдарыңызды егжей-тегжейлі сипаттаңыз... Мысалы: 'Бірінші күнінен бастап басым ауырып, жеңіл жүрек айну сезімі бар'"
+                      placeholder="Симптомдарыңызды сипаттаңыз... Мысалы: 'Басым ауырып, температурам бар'"
                       className="w-full px-4 py-3 pl-12 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition placeholder-gray-400"
                       disabled={isAnalyzing}
                     />
@@ -551,7 +646,7 @@ const MedicalAIAssistantPage = () => {
                     Деректеріңіз қорғалған және анонимді
                   </div>
                   <div>
-                    Жіберу үшін <kbd className="px-2 py-1 bg-gray-100 rounded text-xs border border-gray-300">Enter</kbd> пернесін басыңыз
+                    <kbd className="px-2 py-1 bg-gray-100 rounded text-xs border border-gray-300">Enter</kbd> - жіберу
                   </div>
                 </div>
               </div>
@@ -559,7 +654,7 @@ const MedicalAIAssistantPage = () => {
           </div>
         </div>
 
-        {/* Талдау нәтижелері (бар болса) */}
+        {/* Талдау нәтижелері */}
         {analysisResult && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -611,7 +706,7 @@ const MedicalAIAssistantPage = () => {
                       </div>
                       <button
                         onClick={() => handleBookConsultation(specialist)}
-                        className="px-3 py-1 bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm rounded-lg hover:from-emerald-600 hover:to-teal-600 transition opacity-100 group-hover:opacity-100 shadow-sm hover:shadow"
+                        className="px-3 py-1 bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm rounded-lg hover:from-emerald-600 hover:to-teal-600 transition shadow-sm hover:shadow"
                       >
                         Жазылу
                       </button>
@@ -648,11 +743,11 @@ const MedicalAIAssistantPage = () => {
                 </h4>
                 <div className="space-y-3">
                   <button
-                    onClick={() => window.location.href = "/video-conference"}
+                    onClick={() => window.location.href = "/meet"}
                     className="w-full p-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:from-emerald-600 hover:to-teal-600 transition text-left flex items-center shadow-md hover:shadow-lg"
                   >
                     <FaVideo className="w-5 h-5 mr-3" />
-                    Бейнеконсультацияға жазылу
+                    Бейнеконсультация
                   </button>
                   <button
                     onClick={clearChat}
@@ -661,7 +756,7 @@ const MedicalAIAssistantPage = () => {
                     <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
-                    Жаңа талдауды бастау
+                    Жаңа талдау
                   </button>
                 </div>
               </div>

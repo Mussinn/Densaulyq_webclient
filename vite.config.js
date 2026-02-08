@@ -9,9 +9,10 @@ export default defineConfig({
   // ← Вот это самое важное — проксирование /api на бэкенд
   server: {
     proxy: {
+      //http://192.168.8.9:8080/
       // Все запросы, начинающиеся с /api, перенаправляются на http://localhost:8080
       '/api': {
-        target: 'http://localhost:8080',
+        target: 'http://192.168.8.9:8080',
         changeOrigin: true,
         secure: false,
         // rewrite: (path) => path.replace(/^\/api/, '/api') // обычно не нужно
