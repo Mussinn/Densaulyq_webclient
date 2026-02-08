@@ -22,6 +22,9 @@ import IncomingCallModal from "./components/IncomingCallModal";
 import PersonalProfile from "./pages/PersonalProfile";
 import OnlineBooking from "./pages/OnlineBooking";
 import DoctorAppointments from "./pages/DoctorAppointments";
+import MedicalTestsPage from "./pages/MedicalTestsPage";
+import DoctorConsultations from "./pages/DoctorConsultations"; 
+import DoctorMessenger from "./pages/DoctorMessenger";
 
 function App() {
   const { token: authToken, user } = useSelector((state) => state.token);
@@ -186,6 +189,10 @@ function App() {
         />
 
         <Route element={<Layout />}>
+        DoctorMessenger
+        <Route path="/doctor-messenger" element={<PrivateRoute><DoctorMessenger /></PrivateRoute>} />
+        <Route path="/doctor-consultations" element={<PrivateRoute><DoctorConsultations /></PrivateRoute>} />
+        <Route path="/medical-tests" element={<PrivateRoute><MedicalTestsPage /></PrivateRoute>} />
           <Route path="/doctor-appointments" element={<PrivateRoute><DoctorAppointments /></PrivateRoute>} />
           <Route path="/booking" element={<PrivateRoute><OnlineBooking /></PrivateRoute>} />
           <Route path="/profile" element={<PrivateRoute><PersonalProfile /></PrivateRoute>} />

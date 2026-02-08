@@ -1,6 +1,6 @@
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
-import { FaSignOutAlt, FaUserCircle, FaClinicMedical, FaVideo, FaRobot } from 'react-icons/fa';
+import { FaSignOutAlt, FaUserCircle, FaFileMedical, FaVideo, FaRobot } from 'react-icons/fa';
 import { GiHealthPotion, GiHealthDecrease, GiStethoscope, GiHeartPlus } from 'react-icons/gi';
 import { MdHealthAndSafety, MdDashboard, MdAudiotrack, MdLocalHospital } from 'react-icons/md';
 import { useSelector, useDispatch } from 'react-redux';
@@ -140,13 +140,13 @@ function Layout() {
                       <MdLocalHospital className="mr-2" />
                       Басты бет
                     </NavLink>
-                    <NavLink to="/doctor-appointments" className={linkClass}>
+                      <NavLink to="/doctor-appointments" className={linkClass}>
+                        <MdLocalHospital className="mr-2" />
+                        Жазылу тізімі
+                      </NavLink>
+                    <NavLink to="/doctor-consultations" className={linkClass}>
                       <MdLocalHospital className="mr-2" />
-                      Жазылу тізімі
-                    </NavLink>
-                    <NavLink to="/dashboard" className={linkClass}>
-                      <MdDashboard className="mr-2" />
-                      Бақылау тақтасы
+                      Дәрігер консильтациялары
                     </NavLink>
                     <NavLink to="/audit/logs" className={linkClass}>
                       <MdAudiotrack className="mr-2" />
@@ -155,6 +155,10 @@ function Layout() {
                     <NavLink to="/diagnosis/create" className={linkClass}>
                       <GiStethoscope className="mr-2" />
                       Диагноз құру
+                    </NavLink>
+                    <NavLink to="/doctor-messenger" className={linkClass}>
+                      <GiStethoscope className="mr-2" />
+                      Messenger
                     </NavLink>
                   </>
                 )}
@@ -175,6 +179,10 @@ function Layout() {
                     <NavLink to="/meet" className={linkClass}>
                       <FaVideo className="mr-2" />
                       Бейнеконсультация
+                    </NavLink>
+                    <NavLink to="/medical-tests" className={linkClass}>
+                      <FaFileMedical className="mr-2" />
+                      Медициналық сынақтар
                     </NavLink>
                     <NavLink to="/diagnosis/view" className={linkClass}>
                       <GiHealthDecrease className="mr-2" />
