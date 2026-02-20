@@ -19,7 +19,18 @@ import {
   FaLink,
   FaPaperPlane,
   FaExclamationTriangle,
-  FaUserTie
+  FaUserTie,
+  FaUsers,
+  FaChartLine,
+  FaHistory,
+  FaPhone,
+  FaSearch,
+  FaFilter,
+  FaStar,
+  FaCreditCard,
+  FaMoneyBill,
+  FaReceipt,
+  FaExternalLinkAlt
 } from "react-icons/fa";
 
 const DoctorAppointments = () => {
@@ -28,6 +39,25 @@ const DoctorAppointments = () => {
   const [loading, setLoading] = useState(true);
   const [meetingsLoading, setMeetingsLoading] = useState(false);
   const [filter, setFilter] = useState('all');
+  const [activeTab, setActiveTab] = useState('appointments'); // appointments | patients | meetings
+
+  // Платежи
+  const [showCreatePaymentModal, setShowCreatePaymentModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentDetails, setPaymentDetails] = useState(null);
+  const [creatingPayment, setCreatingPayment] = useState(false);
+  const [paymentLink, setPaymentLink] = useState('');
+  const [selectedAppointmentForPayment, setSelectedAppointmentForPayment] = useState(null);
+  const [paymentAmount, setPaymentAmount] = useState(5000);
+  const [customAmount, setCustomAmount] = useState('');
+  const [isCustomAmount, setIsCustomAmount] = useState(false);
+  const [paymentError, setPaymentError] = useState('');
+  
+  // Для пациентов
+  const [patients, setPatients] = useState([]);
+  const [selectedPatient, setSelectedPatient] = useState(null);
+  const [patientSearchQuery, setPatientSearchQuery] = useState('');
+  const [patientFilter, setPatientFilter] = useState('all'); // all | frequent | recent
 
   const [showMeetingModal, setShowMeetingModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
@@ -43,6 +73,98 @@ const DoctorAppointments = () => {
   const [sharing, setSharing] = useState(false);
 
   const { token } = useSelector((state) => state.token);
+
+  // Пресеты сумм для оплаты
+  const presetAmounts = [3000, 5000, 7000, 10000, 15000];
+
+  // Функция создания платежа
+  const createPayment = async () => {
+    try {
+      // Валидация суммы
+      let amount = paymentAmount;
+      if (isCustomAmount) {
+        amount = parseInt(customAmount);
+        if (isNaN(amount) || amount < 100) {
+          setPaymentError('Минимальная сумма 100 ₸');
+          return;
+        }
+      }
+
+      setCreatingPayment(true);
+      setPaymentError('');
+
+      // Получаем ID доктора
+      const userRes = await api.get('/api/v1/users/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const user = userRes.data;
+      const doctorId = user?.doctor?.doctorId || user?.userId;
+
+      const response = await api.post('/api/payments/create', {
+        appointmentId: selectedAppointmentForPayment.id,
+        amount: amount,
+        currency: 'KZT',
+        description: `Консультация с ${selectedAppointmentForPayment.patientName}`,
+        patientEmail: selectedAppointmentForPayment.patientEmail
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      setPaymentDetails(response.data);
+      setPaymentLink(response.data.paymentUrl);
+      
+      // Закрываем модалку создания и открываем модалку с ссылкой
+      setShowCreatePaymentModal(false);
+      setShowPaymentModal(true);
+      
+      // Сбрасываем состояние
+      setPaymentAmount(5000);
+      setCustomAmount('');
+      setIsCustomAmount(false);
+      
+    } catch (err) {
+      console.error('Ошибка создания платежа:', err);
+      setPaymentError(err.response?.data?.error || err.message);
+    } finally {
+      setCreatingPayment(false);
+    }
+  };
+
+  // Открыть модалку создания платежа
+  const openCreatePaymentModal = (appointment) => {
+    setSelectedAppointmentForPayment(appointment);
+    setPaymentAmount(5000);
+    setCustomAmount('');
+    setIsCustomAmount(false);
+    setPaymentError('');
+    setShowCreatePaymentModal(true);
+  };
+
+  // Обработчик выбора суммы
+  const handleAmountSelect = (amount) => {
+    setPaymentAmount(amount);
+    setIsCustomAmount(false);
+    setCustomAmount('');
+    setPaymentError('');
+  };
+
+  // Обработчик изменения своей суммы
+  const handleCustomAmountChange = (e) => {
+    const value = e.target.value.replace(/[^0-9]/g, '');
+    setCustomAmount(value);
+    if (value) {
+      setPaymentAmount(parseInt(value));
+    }
+    setPaymentError('');
+  };
+
+  // Копирование ссылки
+  const copyLink = (url) => {
+    if (url) {
+      navigator.clipboard.writeText(url);
+      alert('Ссылка скопирована в буфер обмена');
+    }
+  };
 
   // ────────────────────────────────────────────────
   // Загрузка данных доктора и его записей
@@ -64,12 +186,17 @@ const DoctorAppointments = () => {
         const normalizedAppointments = appointmentsRes.data?.map(app => ({
           ...app,
           id: app.appointment_id || app.appointmentId || app.id,
-          patientName: `${app.patient?.firstName || ''} ${app.patient?.lastName || ''}`,
+          patientName: `${app.patient?.firstName || ''} ${app.patient?.lastName || ''}`.trim() || 'Пациент',
           patientEmail: app.patient?.email || app.patient?.user?.email,
-          patientId: app.patient?.patientId || app.patient?.id
+          patientId: app.patient?.patientId || app.patient?.id,
+          patientPhone: app.patient?.phone || app.patient?.user?.phone || '',
         })) || [];
 
         setAppointments(normalizedAppointments);
+
+        // Формируем список пациентов
+        processPatients(normalizedAppointments);
+
         await fetchMeetings(doctorId);
       }
     } catch (err) {
@@ -78,6 +205,56 @@ const DoctorAppointments = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // ────────────────────────────────────────────────
+  // Обработка пациентов из записей
+  // ────────────────────────────────────────────────
+  const processPatients = (appointmentsList) => {
+    const patientsMap = {};
+
+    appointmentsList.forEach(app => {
+      const pid = app.patientId;
+      if (!pid) return;
+
+      if (!patientsMap[pid]) {
+        patientsMap[pid] = {
+          id: pid,
+          name: app.patientName,
+          email: app.patientEmail,
+          phone: app.patientPhone,
+          totalAppointments: 0,
+          completedAppointments: 0,
+          cancelledAppointments: 0,
+          scheduledAppointments: 0,
+          lastVisit: null,
+          firstVisit: null,
+          appointments: []
+        };
+      }
+
+      const patient = patientsMap[pid];
+      patient.totalAppointments++;
+      patient.appointments.push(app);
+
+      if (app.status === 'completed') patient.completedAppointments++;
+      if (app.status === 'cancelled') patient.cancelledAppointments++;
+      if (app.status === 'scheduled' || app.status === 'confirmed') patient.scheduledAppointments++;
+
+      const appDate = new Date(app.appointmentDate);
+      if (!patient.lastVisit || appDate > new Date(patient.lastVisit)) {
+        patient.lastVisit = app.appointmentDate;
+      }
+      if (!patient.firstVisit || appDate < new Date(patient.firstVisit)) {
+        patient.firstVisit = app.appointmentDate;
+      }
+    });
+
+    const patientsArray = Object.values(patientsMap).sort((a, b) =>
+      new Date(b.lastVisit) - new Date(a.lastVisit)
+    );
+
+    setPatients(patientsArray);
   };
 
   const fetchMeetings = async (doctorId) => {
@@ -109,7 +286,7 @@ const DoctorAppointments = () => {
           fullName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Доктор без имени',
           email: user.email || '',
           specialty: doctor.specialty || '—',
-          user: user, // Сохраняем весь объект user для доступа к email
+          user: user,
         };
       });
 
@@ -131,6 +308,13 @@ const DoctorAppointments = () => {
       setAppointments(prev => prev.map(app =>
         app.id === id ? { ...app, status } : app
       ));
+
+      // Обновляем список пациентов
+      const updatedAppointments = appointments.map(app =>
+        app.id === id ? { ...app, status } : app
+      );
+      processPatients(updatedAppointments);
+
       alert(`Статус изменён на: ${status}`);
     } catch (err) {
       alert('Ошибка обновления статуса: ' + (err.response?.data?.message || err.message));
@@ -203,8 +387,6 @@ const DoctorAppointments = () => {
     } catch (err) {
       console.error('Ошибка создания встречи:', err);
       alert(err.response?.data?.message || 'Не удалось создать встречу');
-
-      // fallback логика (если есть в вашем проекте)
     } finally {
       setSendingInvite(false);
     }
@@ -244,7 +426,7 @@ const DoctorAppointments = () => {
           email: doctor.email,
           link: selectedMeetingToShare.meetingUrl,
         },
-        headers: { 
+        headers: {
           Authorization: `Bearer ${token}`,
         },
       });
@@ -259,13 +441,6 @@ const DoctorAppointments = () => {
       alert(`Не удалось отправить ссылку\n${errorMessage}`);
     } finally {
       setSharing(false);
-    }
-  };
-
-  const copyLink = (url) => {
-    if (url) {
-      navigator.clipboard.writeText(url);
-      alert('Ссылка скопирована в буфер обмена');
     }
   };
 
@@ -290,12 +465,25 @@ const DoctorAppointments = () => {
   const formatDateTime = (dateString) => {
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString('kk-KZ', {
+      return date.toLocaleDateString('ru-RU', {
         day: 'numeric',
         month: 'short',
         year: 'numeric',
         hour: '2-digit',
         minute: '2-digit'
+      });
+    } catch {
+      return dateString || '—';
+    }
+  };
+
+  const formatDate = (dateString) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('ru-RU', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
       });
     } catch {
       return dateString || '—';
@@ -343,6 +531,32 @@ const DoctorAppointments = () => {
   };
 
   // ────────────────────────────────────────────────
+  // Фильтрация пациентов
+  // ────────────────────────────────────────────────
+  const getFilteredPatients = () => {
+    let filtered = patients;
+
+    if (patientFilter === 'frequent') {
+      filtered = filtered.filter(p => p.totalAppointments >= 3);
+    } else if (patientFilter === 'recent') {
+      const oneMonthAgo = new Date();
+      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+      filtered = filtered.filter(p => new Date(p.lastVisit) >= oneMonthAgo);
+    }
+
+    if (patientSearchQuery.trim()) {
+      const query = patientSearchQuery.toLowerCase();
+      filtered = filtered.filter(p =>
+        p.name.toLowerCase().includes(query) ||
+        p.email?.toLowerCase().includes(query) ||
+        p.phone?.includes(query)
+      );
+    }
+
+    return filtered;
+  };
+
+  // ────────────────────────────────────────────────
   // Эффекты
   // ────────────────────────────────────────────────
   useEffect(() => {
@@ -359,17 +573,19 @@ const DoctorAppointments = () => {
     return true;
   });
 
+  const filteredPatients = getFilteredPatients();
+
   // ────────────────────────────────────────────────
   // RENDER
   // ────────────────────────────────────────────────
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
-      {/* Заголовок и фильтры */}
+      {/* Заголовок */}
       <div className="mb-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">Записи на прием</h1>
-            <p className="text-gray-600">Управление приемами пациентами</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">Панель врача</h1>
+            <p className="text-gray-600">Управление приемами, пациентами и встречами</p>
           </div>
           <button
             onClick={fetchData}
@@ -383,160 +599,483 @@ const DoctorAppointments = () => {
               </>
             ) : (
               <>
-                <FaCalendar className="mr-2" /> Обновить список
+                <FaCalendar className="mr-2" /> Обновить
               </>
             )}
           </button>
         </div>
 
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        {/* Табы */}
+        <div className="bg-white rounded-2xl p-2 shadow-sm border border-gray-100">
           <div className="flex flex-wrap gap-2">
             <button
-              onClick={() => setFilter('all')}
-              className={`px-4 py-2.5 rounded-xl flex items-center transition-all ${filter === 'all' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}
+              onClick={() => setActiveTab('appointments')}
+              className={`px-5 py-3 rounded-xl flex items-center transition-all font-medium ${activeTab === 'appointments'
+                  ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md'
+                  : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                }`}
             >
-              <FaCalendar className="mr-2" /> Все записи
+              <FaCalendar className="mr-2" /> Записи на прием
+              <span className="ml-2 px-2 py-0.5 bg-white/20 rounded-full text-xs">
+                {filteredApps.length}
+              </span>
             </button>
+
             <button
-              onClick={() => setFilter('active')}
-              className={`px-4 py-2.5 rounded-xl flex items-center transition-all ${filter === 'active' ? 'bg-green-600 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}
+              onClick={() => setActiveTab('patients')}
+              className={`px-5 py-3 rounded-xl flex items-center transition-all font-medium ${activeTab === 'patients'
+                  ? 'bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shadow-md'
+                  : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                }`}
             >
-              <FaCheckCircle className="mr-2" /> Активные
+              <FaUsers className="mr-2" /> Мои пациенты
+              <span className="ml-2 px-2 py-0.5 bg-white/20 rounded-full text-xs">
+                {patients.length}
+              </span>
             </button>
+
             <button
-              onClick={() => setFilter('completed')}
-              className={`px-4 py-2.5 rounded-xl flex items-center transition-all ${filter === 'completed' ? 'bg-gray-600 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}
+              onClick={() => setActiveTab('meetings')}
+              className={`px-5 py-3 rounded-xl flex items-center transition-all font-medium ${activeTab === 'meetings'
+                  ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-md'
+                  : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                }`}
             >
-              <FaCheck className="mr-2" /> Завершенные
-            </button>
-            <button
-              onClick={() => setFilter('cancelled')}
-              className={`px-4 py-2.5 rounded-xl flex items-center transition-all ${filter === 'cancelled' ? 'bg-red-600 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}
-            >
-              <FaTimes className="mr-2" /> Отмененные
+              <FaVideo className="mr-2" /> Видеовстречи
+              <span className="ml-2 px-2 py-0.5 bg-white/20 rounded-full text-xs">
+                {meetings.length}
+              </span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Две колонки */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Записи пациентов */}
-        <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden flex flex-col" style={{ height: '700px' }}>
-          <div className="p-6 border-b border-gray-100 flex-shrink-0">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <div className="p-2.5 bg-blue-50 rounded-xl mr-3">
-                  <FaUserMd className="text-xl text-blue-600" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-gray-800">Записи пациентов</h2>
-                  <p className="text-sm text-gray-500">Запланированные приемы</p>
-                </div>
-              </div>
-              <span className="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full">
-                {filteredApps.length} записей
-              </span>
+      {/* ════════════════════════════════════════════ */}
+      {/* ВКЛАДКА: ЗАПИСИ НА ПРИЕМ */}
+      {/* ════════════════════════════════════════════ */}
+      {activeTab === 'appointments' && (
+        <>
+          {/* Фильтры записей */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-6">
+            <div className="flex items-center mb-3">
+              <FaFilter className="text-gray-500 mr-2" />
+              <span className="font-medium text-gray-700">Фильтры:</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setFilter('all')}
+                className={`px-4 py-2.5 rounded-xl flex items-center transition-all ${filter === 'all' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                  }`}
+              >
+                <FaCalendar className="mr-2" /> Все записи
+              </button>
+              <button
+                onClick={() => setFilter('active')}
+                className={`px-4 py-2.5 rounded-xl flex items-center transition-all ${filter === 'active' ? 'bg-green-600 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                  }`}
+              >
+                <FaCheckCircle className="mr-2" /> Активные
+              </button>
+              <button
+                onClick={() => setFilter('completed')}
+                className={`px-4 py-2.5 rounded-xl flex items-center transition-all ${filter === 'completed' ? 'bg-gray-600 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                  }`}
+              >
+                <FaCheck className="mr-2" /> Завершенные
+              </button>
+              <button
+                onClick={() => setFilter('cancelled')}
+                className={`px-4 py-2.5 rounded-xl flex items-center transition-all ${filter === 'cancelled' ? 'bg-red-600 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                  }`}
+              >
+                <FaTimes className="mr-2" /> Отмененные
+              </button>
             </div>
           </div>
 
-          <div className="p-4 flex-grow overflow-y-auto">
-            {loading ? (
-              <div className="py-12 text-center">
-                <FaSpinner className="animate-spin mx-auto text-3xl text-blue-600 mb-4" />
-                <p className="text-gray-600">Загрузка записей...</p>
+          {/* Список записей */}
+          <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
+            <div className="p-6 border-b border-gray-100">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="p-2.5 bg-blue-50 rounded-xl mr-3">
+                    <FaUserMd className="text-xl text-blue-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-800">Записи пациентов</h2>
+                    <p className="text-sm text-gray-500">Запланированные приемы</p>
+                  </div>
+                </div>
+                <span className="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full">
+                  {filteredApps.length} записей
+                </span>
               </div>
-            ) : filteredApps.length === 0 ? (
-              <div className="py-12 text-center">
-                <FaCalendar className="text-4xl mx-auto text-gray-400 mb-3" />
-                <h3 className="text-lg font-medium text-gray-700 mb-2">Нет записей</h3>
-                <p className="text-gray-500">Выберите другой фильтр или проверьте позже</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {filteredApps.map(app => (
-                  <div key={app.id} className="bg-gray-50 rounded-xl p-4 hover:bg-blue-50 transition-all border border-gray-100">
-                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-start mb-3">
-                          <div className="p-2 bg-white rounded-lg mr-3 border border-gray-200">
-                            <FaUserInjured className="text-gray-600" />
+            </div>
+
+            <div className="p-4 max-h-[700px] overflow-y-auto">
+              {loading ? (
+                <div className="py-12 text-center">
+                  <FaSpinner className="animate-spin mx-auto text-3xl text-blue-600 mb-4" />
+                  <p className="text-gray-600">Загрузка записей...</p>
+                </div>
+              ) : filteredApps.length === 0 ? (
+                <div className="py-12 text-center">
+                  <FaCalendar className="text-4xl mx-auto text-gray-400 mb-3" />
+                  <h3 className="text-lg font-medium text-gray-700 mb-2">Нет записей</h3>
+                  <p className="text-gray-500">Выберите другой фильтр или проверьте позже</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {filteredApps.map(app => (
+                    <div key={app.id} className="bg-gray-50 rounded-xl p-4 hover:bg-blue-50 transition-all border border-gray-100">
+                      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-start mb-3">
+                            <div className="p-2 bg-white rounded-lg mr-3 border border-gray-200">
+                              <FaUserInjured className="text-gray-600" />
+                            </div>
+                            <div>
+                              <h3 className="font-bold text-gray-800 text-lg mb-1">{app.patientName || 'Пациент'}</h3>
+                              {app.patientEmail && (
+                                <p className="text-gray-600 text-sm flex items-center">
+                                  <FaEnvelope className="mr-1.5 text-gray-400" size={12} />
+                                  {app.patientEmail}
+                                </p>
+                              )}
+                            </div>
                           </div>
-                          <div>
-                            <h3 className="font-bold text-gray-800 text-lg mb-1">{app.patientName || 'Пациент'}</h3>
-                            {app.patientEmail && (
-                              <p className="text-gray-600 text-sm flex items-center">
-                                <FaEnvelope className="mr-1.5 text-gray-400" size={12} />
-                                {app.patientEmail}
-                              </p>
-                            )}
+
+                          <div className="flex items-center text-gray-600 text-sm mb-3">
+                            <FaClock className="mr-1.5 text-gray-400" />
+                            <span className="font-medium">{formatDateTime(app.appointmentDate)}</span>
                           </div>
+
+                          <span className={`px-3 py-1.5 rounded-lg text-sm font-medium inline-flex items-center ${getAppointmentStatusColor(app.status)}`}>
+                            {app.status === 'confirmed' && <FaCheckCircle className="mr-1.5" size={12} />}
+                            {app.status === 'cancelled' && <FaTimes className="mr-1.5" size={12} />}
+                            {getAppointmentStatusText(app.status)}
+                          </span>
                         </div>
 
-                        <div className="flex items-center text-gray-600 text-sm mb-3">
-                          <FaClock className="mr-1.5 text-gray-400" />
-                          <span className="font-medium">{formatDateTime(app.appointmentDate)}</span>
+                        <div className="flex flex-col space-y-2 min-w-[180px]">
+                          {app.status === 'scheduled' && (
+                            <>
+                              <button
+                                onClick={() => updateStatus(app.id, 'confirmed')}
+                                className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 text-sm font-medium"
+                              >
+                                <FaCheck className="mr-2 inline" /> Подтвердить
+                              </button>
+                              <button
+                                onClick={() => updateStatus(app.id, 'cancelled')}
+                                className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 text-sm font-medium"
+                              >
+                                <FaTimes className="mr-2 inline" /> Отменить
+                              </button>
+                            </>
+                          )}
+
+                          {app.status === 'confirmed' && (
+                            <>
+                              <button
+                                onClick={() => updateStatus(app.id, 'completed')}
+                                className="px-4 py-2 bg-gray-700 text-white rounded-xl hover:bg-gray-800 text-sm font-medium flex items-center"
+                              >
+                                <FaCheckCircle className="mr-2" /> Завершить
+                              </button>
+                              <button
+                                onClick={() => openMeetingModal(app)}
+                                className="px-4 py-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700 text-sm font-medium flex items-center"
+                              >
+                                <FaVideo className="mr-2" /> Видеовстреча
+                              </button>
+                            </>
+                          )}
+
+                          {app.status === 'completed' && (
+                            <>
+                              <button
+                                onClick={() => openCreatePaymentModal(app)}
+                                disabled={creatingPayment && selectedAppointmentForPayment?.id === app.id}
+                                className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 text-sm font-medium flex items-center justify-center"
+                              >
+                                {creatingPayment && selectedAppointmentForPayment?.id === app.id ? (
+                                  <><FaSpinner className="animate-spin mr-2" /> Создание...</>
+                                ) : (
+                                  <><FaCreditCard className="mr-2" /> Выставить счет</>
+                                )}
+                              </button>
+                            </>
+                          )}
+
+                          {(app.status === 'cancelled') && (
+                            <div className="text-center p-2 text-sm font-medium text-red-600">
+                              Прием отменен
+                            </div>
+                          )}
                         </div>
-
-                        <span className={`px-3 py-1.5 rounded-lg text-sm font-medium inline-flex items-center ${getAppointmentStatusColor(app.status)}`}>
-                          {app.status === 'confirmed' && <FaCheckCircle className="mr-1.5" size={12} />}
-                          {app.status === 'cancelled' && <FaTimes className="mr-1.5" size={12} />}
-                          {getAppointmentStatusText(app.status)}
-                        </span>
-                      </div>
-
-                      <div className="flex flex-col space-y-2 min-w-[180px]">
-                        {app.status === 'scheduled' && (
-                          <>
-                            <button
-                              onClick={() => updateStatus(app.id, 'confirmed')}
-                              className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 text-sm font-medium"
-                            >
-                              <FaCheck className="mr-2 inline" /> Подтвердить
-                            </button>
-                            <button
-                              onClick={() => updateStatus(app.id, 'cancelled')}
-                              className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 text-sm font-medium"
-                            >
-                              <FaTimes className="mr-2 inline" /> Отменить
-                            </button>
-                          </>
-                        )}
-
-                        {app.status === 'confirmed' && (
-                          <>
-                            <button
-                              onClick={() => updateStatus(app.id, 'completed')}
-                              className="px-4 py-2 bg-gray-700 text-white rounded-xl hover:bg-gray-800 text-sm font-medium"
-                            >
-                              <FaCheckCircle className="mr-2 inline" /> Завершить
-                            </button>
-                            <button
-                              onClick={() => openMeetingModal(app)}
-                              className="px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 text-sm font-medium shadow-md"
-                            >
-                              <FaVideo className="mr-2 inline" /> Видеовстреча
-                            </button>
-                          </>
-                        )}
-
-                        {(app.status === 'completed' || app.status === 'cancelled') && (
-                          <div className={`text-center p-2 text-sm font-medium ${app.status === 'completed' ? 'text-gray-600' : 'text-red-600'}`}>
-                            {app.status === 'completed' ? 'Прием завершен' : 'Прием отменен'}
-                          </div>
-                        )}
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        </>
+      )}
 
-        {/* Видеовстречи */}
-        <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden flex flex-col" style={{ height: '700px' }}>
-          <div className="p-6 border-b border-gray-100 flex-shrink-0">
+      {/* ════════════════════════════════════════════ */}
+      {/* ВКЛАДКА: МОИ ПАЦИЕНТЫ */}
+      {/* ════════════════════════════════════════════ */}
+      {activeTab === 'patients' && (
+        <>
+          {/* Фильтры и поиск пациентов */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <FaSearch className="inline mr-2" />
+                  Поиск пациента:
+                </label>
+                <input
+                  type="text"
+                  value={patientSearchQuery}
+                  onChange={(e) => setPatientSearchQuery(e.target.value)}
+                  placeholder="Имя, email или телефон..."
+                  className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <FaFilter className="inline mr-2" />
+                  Категория:
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPatientFilter('all')}
+                    className={`flex-1 px-4 py-2.5 rounded-xl transition-all text-sm font-medium ${patientFilter === 'all' ? 'bg-emerald-600 text-white' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                      }`}
+                  >
+                    Все
+                  </button>
+                  <button
+                    onClick={() => setPatientFilter('frequent')}
+                    className={`flex-1 px-4 py-2.5 rounded-xl transition-all text-sm font-medium ${patientFilter === 'frequent' ? 'bg-emerald-600 text-white' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                      }`}
+                  >
+                    <FaStar className="inline mr-1" />
+                    Частые (≥3)
+                  </button>
+                  <button
+                    onClick={() => setPatientFilter('recent')}
+                    className={`flex-1 px-4 py-2.5 rounded-xl transition-all text-sm font-medium ${patientFilter === 'recent' ? 'bg-emerald-600 text-white' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                      }`}
+                  >
+                    <FaClock className="inline mr-1" />
+                    Недавние
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Список пациентов */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-1">
+              <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
+                <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-emerald-50 to-teal-50">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-xl font-bold text-gray-800 flex items-center">
+                        <FaUsers className="mr-2 text-emerald-600" />
+                        Пациенты
+                      </h2>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Найдено: {filteredPatients.length}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="max-h-[700px] overflow-y-auto">
+                  {loading ? (
+                    <div className="py-12 text-center">
+                      <FaSpinner className="animate-spin mx-auto text-3xl text-emerald-600 mb-4" />
+                      <p className="text-gray-600">Загрузка...</p>
+                    </div>
+                  ) : filteredPatients.length === 0 ? (
+                    <div className="py-12 text-center px-4">
+                      <FaUsers className="text-4xl mx-auto text-gray-400 mb-3" />
+                      <h3 className="text-lg font-medium text-gray-700 mb-2">Нет пациентов</h3>
+                      <p className="text-gray-500 text-sm">Измените фильтры или поиск</p>
+                    </div>
+                  ) : (
+                    <div className="p-3 space-y-2">
+                      {filteredPatients.map(patient => (
+                        <button
+                          key={patient.id}
+                          onClick={() => setSelectedPatient(patient)}
+                          className={`w-full text-left p-4 rounded-xl transition-all border-2 ${selectedPatient?.id === patient.id
+                              ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white border-emerald-600 shadow-lg'
+                              : 'bg-gray-50 hover:bg-emerald-50 border-gray-100 hover:border-emerald-200'
+                            }`}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <h3 className={`font-bold text-base ${selectedPatient?.id === patient.id ? 'text-white' : 'text-gray-800'
+                              }`}>
+                              {patient.name}
+                            </h3>
+                            {patient.totalAppointments >= 5 && (
+                              <FaStar className={`${selectedPatient?.id === patient.id ? 'text-yellow-300' : 'text-yellow-500'
+                                }`} />
+                            )}
+                          </div>
+                          <div className={`flex items-center text-sm mb-1 ${selectedPatient?.id === patient.id ? 'text-emerald-50' : 'text-gray-600'
+                            }`}>
+                            <FaCalendar className="mr-2" size={12} />
+                            <span>{patient.totalAppointments} приёмов</span>
+                          </div>
+                          <div className={`flex items-center text-sm ${selectedPatient?.id === patient.id ? 'text-emerald-50' : 'text-gray-500'
+                            }`}>
+                            <FaClock className="mr-2" size={12} />
+                            <span>Последний: {formatDate(patient.lastVisit)}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="lg:col-span-2">
+              <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
+                {selectedPatient ? (
+                  <>
+                    <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-emerald-500 to-teal-500 text-white">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center">
+                          <div className="p-3 bg-white/20 rounded-2xl mr-4 backdrop-blur-sm">
+                            <FaUserInjured className="text-3xl text-white" />
+                          </div>
+                          <div>
+                            <h2 className="text-2xl font-bold mb-2">{selectedPatient.name}</h2>
+                            <div className="space-y-1">
+                              {selectedPatient.email && (
+                                <p className="text-emerald-50 text-sm flex items-center">
+                                  <FaEnvelope className="mr-2" size={14} />
+                                  {selectedPatient.email}
+                                </p>
+                              )}
+                              {selectedPatient.phone && (
+                                <p className="text-emerald-50 text-sm flex items-center">
+                                  <FaPhone className="mr-2" size={14} />
+                                  {selectedPatient.phone}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
+                      <h3 className="font-bold text-gray-800 mb-4 flex items-center text-lg">
+                        <FaChartLine className="mr-2 text-emerald-600" />
+                        Статистика посещений
+                      </h3>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="bg-white p-4 rounded-xl border-2 border-blue-100 text-center">
+                          <div className="text-3xl font-bold text-blue-600 mb-1">
+                            {selectedPatient.totalAppointments}
+                          </div>
+                          <div className="text-xs text-gray-600 font-medium">Всего приёмов</div>
+                        </div>
+                        <div className="bg-white p-4 rounded-xl border-2 border-green-100 text-center">
+                          <div className="text-3xl font-bold text-green-600 mb-1">
+                            {selectedPatient.completedAppointments}
+                          </div>
+                          <div className="text-xs text-gray-600 font-medium">Завершено</div>
+                        </div>
+                        <div className="bg-white p-4 rounded-xl border-2 border-yellow-100 text-center">
+                          <div className="text-3xl font-bold text-yellow-600 mb-1">
+                            {selectedPatient.scheduledAppointments}
+                          </div>
+                          <div className="text-xs text-gray-600 font-medium">Запланировано</div>
+                        </div>
+                        <div className="bg-white p-4 rounded-xl border-2 border-red-100 text-center">
+                          <div className="text-3xl font-bold text-red-600 mb-1">
+                            {selectedPatient.cancelledAppointments}
+                          </div>
+                          <div className="text-xs text-gray-600 font-medium">Отменено</div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 mt-4">
+                        <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-4 rounded-xl border border-purple-200">
+                          <div className="text-sm text-gray-600 mb-1 font-medium">Первое посещение</div>
+                          <div className="text-lg font-bold text-purple-700">
+                            {formatDate(selectedPatient.firstVisit)}
+                          </div>
+                        </div>
+                        <div className="bg-gradient-to-r from-cyan-50 to-blue-50 p-4 rounded-xl border border-cyan-200">
+                          <div className="text-sm text-gray-600 mb-1 font-medium">Последнее посещение</div>
+                          <div className="text-lg font-bold text-cyan-700">
+                            {formatDate(selectedPatient.lastVisit)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-6">
+                      <h3 className="font-bold text-gray-800 mb-4 flex items-center text-lg">
+                        <FaHistory className="mr-2 text-emerald-600" />
+                        История приёмов ({selectedPatient.appointments.length})
+                      </h3>
+                      <div className="max-h-[400px] overflow-y-auto space-y-3">
+                        {selectedPatient.appointments
+                          .sort((a, b) => new Date(b.appointmentDate) - new Date(a.appointmentDate))
+                          .map(app => (
+                            <div key={app.id} className="bg-gray-50 rounded-xl p-4 border border-gray-200 hover:bg-blue-50 transition-all">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center text-gray-700 font-medium">
+                                  <FaClock className="mr-2 text-gray-400" size={14} />
+                                  <span className="text-sm">{formatDateTime(app.appointmentDate)}</span>
+                                </div>
+                                <span className={`px-3 py-1 rounded-lg text-xs font-medium ${getAppointmentStatusColor(app.status)}`}>
+                                  {getAppointmentStatusText(app.status)}
+                                </span>
+                              </div>
+                              {app.notes && (
+                                <div className="text-sm text-gray-600 mt-2 p-2 bg-white rounded-lg border border-gray-100">
+                                  {app.notes}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="py-20 text-center">
+                    <FaUserInjured className="text-5xl mx-auto text-gray-300 mb-4" />
+                    <h3 className="text-xl font-medium text-gray-700 mb-2">Выберите пациента</h3>
+                    <p className="text-gray-500">Нажмите на пациента слева, чтобы увидеть детали</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ════════════════════════════════════════════ */}
+      {/* ВКЛАДКА: ВИДЕОВСТРЕЧИ */}
+      {/* ════════════════════════════════════════════ */}
+      {activeTab === 'meetings' && (
+        <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
+          <div className="p-6 border-b border-gray-100">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <div className="p-2.5 bg-purple-50 rounded-xl mr-3">
@@ -547,11 +1086,16 @@ const DoctorAppointments = () => {
                   <p className="text-sm text-gray-500">Созданные консультации</p>
                 </div>
               </div>
-              {meetingsLoading && <FaSpinner className="animate-spin text-purple-600" />}
+              <div className="flex items-center gap-2">
+                {meetingsLoading && <FaSpinner className="animate-spin text-purple-600" />}
+                <span className="bg-purple-100 text-purple-800 text-sm font-medium px-3 py-1 rounded-full">
+                  {meetings.length} встреч
+                </span>
+              </div>
             </div>
           </div>
 
-          <div className="p-4 flex-grow overflow-y-auto">
+          <div className="p-4 max-h-[700px] overflow-y-auto">
             {meetingsLoading ? (
               <div className="py-12 text-center">
                 <FaSpinner className="animate-spin mx-auto text-3xl text-purple-600 mb-4" />
@@ -561,7 +1105,7 @@ const DoctorAppointments = () => {
               <div className="py-12 text-center">
                 <FaVideo className="text-4xl mx-auto text-gray-400 mb-3" />
                 <h3 className="text-lg font-medium text-gray-700 mb-2">Нет встреч</h3>
-                <p className="text-gray-500">Создайте первую видеовстречу</p>
+                <p className="text-gray-500">Создайте первую видеовстречу из записи пациента</p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -594,14 +1138,14 @@ const DoctorAppointments = () => {
                         <>
                           <button
                             onClick={() => updateMeetingStatus(meeting.id, 'ACTIVE')}
-                            className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 text-sm font-medium"
+                            className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 text-sm font-medium flex items-center"
                           >
                             <FaPlay className="mr-2" /> Начать
                           </button>
                           {meeting.meetingUrl && (
                             <button
                               onClick={() => window.open(meeting.meetingUrl, '_blank')}
-                              className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-sm font-medium"
+                              className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-sm font-medium flex items-center"
                             >
                               <FaVideo className="mr-2" /> Присоединиться
                             </button>
@@ -613,25 +1157,25 @@ const DoctorAppointments = () => {
                         <>
                           <button
                             onClick={() => updateMeetingStatus(meeting.id, 'COMPLETED')}
-                            className="px-4 py-2 bg-gray-700 text-white rounded-xl hover:bg-gray-800 text-sm font-medium"
+                            className="px-4 py-2 bg-gray-700 text-white rounded-xl hover:bg-gray-800 text-sm font-medium flex items-center"
                           >
                             <FaStop className="mr-2" /> Завершить
                           </button>
                           <button
                             onClick={() => window.open(meeting.meetingUrl, '_blank')}
-                            className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 text-sm font-medium"
+                            className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 text-sm font-medium flex items-center"
                           >
                             <FaVideo className="mr-2" /> Присоединиться
                           </button>
                           <button
                             onClick={() => copyLink(meeting.meetingUrl)}
-                            className="px-4 py-2 bg-gray-600 text-white rounded-xl hover:bg-gray-700 text-sm font-medium"
+                            className="px-4 py-2 bg-gray-600 text-white rounded-xl hover:bg-gray-700 text-sm font-medium flex items-center"
                           >
                             <FaCopy className="mr-2" /> Копировать
                           </button>
                           <button
                             onClick={() => openShareModal(meeting)}
-                            className="px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 text-sm font-medium"
+                            className="px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 text-sm font-medium flex items-center"
                           >
                             <FaShare className="mr-2" /> Поделиться
                           </button>
@@ -641,7 +1185,7 @@ const DoctorAppointments = () => {
                       {meeting.status === 'COMPLETED' && meeting.meetingUrl && (
                         <button
                           onClick={() => window.open(meeting.meetingUrl, '_blank')}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-sm font-medium"
+                          className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-sm font-medium flex items-center"
                         >
                           <FaVideo className="mr-2" /> Открыть запись
                         </button>
@@ -659,7 +1203,279 @@ const DoctorAppointments = () => {
             )}
           </div>
         </div>
-      </div>
+      )}
+
+      {/* МОДАЛЬНОЕ ОКНО СОЗДАНИЯ ПЛАТЕЖА */}
+      {showCreatePaymentModal && selectedAppointmentForPayment && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
+            <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-green-500 to-green-600">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center text-white">
+                  <div className="p-2 bg-white/20 rounded-xl mr-3">
+                    <FaCreditCard className="text-xl" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Выставить счет</h2>
+                    <p className="text-sm text-green-100">Для приема пациента</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowCreatePaymentModal(false);
+                    setSelectedAppointmentForPayment(null);
+                    setPaymentError('');
+                  }}
+                  className="p-2 hover:bg-white/20 rounded-xl transition-colors text-white"
+                  disabled={creatingPayment}
+                >
+                  <FaTimes size={20} />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              {/* Информация о пациенте */}
+              <div className="bg-blue-50 rounded-xl p-4 mb-6 border border-blue-100">
+                <div className="flex items-center">
+                  <div className="p-2 bg-white rounded-lg mr-3 border border-blue-200">
+                    <FaUserInjured className="text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-800">{selectedAppointmentForPayment.patientName}</h3>
+                    {selectedAppointmentForPayment.patientEmail && (
+                      <p className="text-sm text-gray-600">{selectedAppointmentForPayment.patientEmail}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Выбор суммы */}
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Выберите сумму
+              </label>
+
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                {presetAmounts.map((preset) => (
+                  <button
+                    key={preset}
+                    onClick={() => handleAmountSelect(preset)}
+                    className={`py-3 px-2 rounded-xl font-medium transition-all ${
+                      !isCustomAmount && paymentAmount === preset
+                        ? 'bg-green-600 text-white shadow-md ring-2 ring-green-300'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
+                    }`}
+                  >
+                    {preset.toLocaleString()} ₸
+                  </button>
+                ))}
+              </div>
+
+              {/* Своя сумма */}
+              <div className="mb-4">
+                <div className="flex items-center mb-2">
+                  <input
+                    type="checkbox"
+                    id="customAmount"
+                    checked={isCustomAmount}
+                    onChange={(e) => {
+                      setIsCustomAmount(e.target.checked);
+                      if (!e.target.checked) {
+                        setPaymentAmount(5000);
+                        setCustomAmount('');
+                      } else {
+                        setPaymentAmount(0);
+                      }
+                    }}
+                    className="w-4 h-4 text-green-600 rounded focus:ring-green-500 mr-2"
+                  />
+                  <label htmlFor="customAmount" className="text-sm text-gray-700">
+                    Своя сумма
+                  </label>
+                </div>
+
+                {isCustomAmount && (
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={customAmount}
+                      onChange={handleCustomAmountChange}
+                      placeholder="Введите сумму"
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-green-500 focus:outline-none"
+                      autoFocus
+                    />
+                    <span className="absolute right-4 top-3 text-gray-500">₸</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Итоговая сумма */}
+              <div className="bg-blue-50 rounded-xl p-4 mb-6 border border-blue-100">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-700 font-medium">Итого к оплате:</span>
+                  <span className="text-2xl font-bold text-gray-800">
+                    {paymentAmount?.toLocaleString() || 0} ₸
+                  </span>
+                </div>
+              </div>
+
+              {/* Ошибка */}
+              {paymentError && (
+                <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-xl text-sm border border-red-200">
+                  {paymentError}
+                </div>
+              )}
+
+              {/* Кнопки */}
+              <div className="flex gap-3">
+                <button
+                  onClick={createPayment}
+                  disabled={creatingPayment || (isCustomAmount && !customAmount)}
+                  className={`flex-1 py-3 rounded-xl text-white font-medium flex items-center justify-center ${
+                    creatingPayment || (isCustomAmount && !customAmount)
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : 'bg-green-600 hover:bg-green-700'
+                  }`}
+                >
+                  {creatingPayment ? (
+                    <>
+                      <FaSpinner className="animate-spin mr-2" />
+                      Создание...
+                    </>
+                  ) : (
+                    <>
+                      <FaCreditCard className="mr-2" />
+                      Создать счет
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCreatePaymentModal(false);
+                    setSelectedAppointmentForPayment(null);
+                    setPaymentError('');
+                  }}
+                  disabled={creatingPayment}
+                  className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200"
+                >
+                  Отмена
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* МОДАЛЬНОЕ ОКНО С ССЫЛКОЙ НА ОПЛАТУ */}
+      {showPaymentModal && paymentDetails && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl">
+            <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-green-500 to-green-600">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center text-white">
+                  <div className="p-2 bg-white/20 rounded-xl mr-3">
+                    <FaExternalLinkAlt className="text-xl" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Счет создан</h2>
+                    <p className="text-sm text-green-100">Отправьте ссылку пациенту</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowPaymentModal(false);
+                    setPaymentDetails(null);
+                    setPaymentLink('');
+                  }}
+                  className="p-2 hover:bg-white/20 rounded-xl transition-colors text-white"
+                >
+                  <FaTimes size={20} />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              {/* Информация о платеже */}
+              <div className="bg-blue-50 rounded-xl p-4 mb-6 border border-blue-100">
+                <div className="flex items-center mb-3">
+                  <div className="p-2 bg-white rounded-lg mr-3 border border-blue-200">
+                    <FaUserInjured className="text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-800">{paymentDetails.patientName}</h3>
+                    <p className="text-gray-600 text-sm">Пациент</p>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-600">Сумма:</span>
+                  <span className="font-bold text-xl text-gray-800">
+                    {paymentDetails.amount?.toLocaleString()} ₸
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-sm mt-2">
+                  <span className="text-gray-600">Статус:</span>
+                  <span className={`px-3 py-1 rounded-lg text-xs font-medium ${
+                    paymentDetails.status === 'PENDING' || paymentDetails.status === 'pending' 
+                      ? 'bg-yellow-100 text-yellow-800' 
+                      : paymentDetails.status === 'PAID' || paymentDetails.status === 'paid'
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-gray-100 text-gray-800'
+                  }`}>
+                    {paymentDetails.status === 'PENDING' || paymentDetails.status === 'pending' 
+                      ? 'Ожидает оплаты' 
+                      : paymentDetails.status === 'PAID' || paymentDetails.status === 'paid'
+                      ? 'Оплачено' 
+                      : paymentDetails.status}
+                  </span>
+                </div>
+              </div>
+
+              {paymentLink && (
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Ссылка на оплату:
+                  </label>
+                  <div className="flex">
+                    <input
+                      readOnly
+                      value={paymentLink}
+                      className="flex-1 border border-gray-300 rounded-l-xl px-4 py-3 bg-gray-50 text-sm"
+                    />
+                    <button
+                      onClick={() => copyLink(paymentLink)}
+                      className="bg-blue-600 text-white px-5 rounded-r-xl hover:bg-blue-700 flex items-center"
+                    >
+                      <FaCopy className="mr-2" />
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Отправьте эту ссылку пациенту для оплаты
+                  </p>
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => window.open(paymentLink, '_blank')}
+                  className="flex-1 bg-green-600 text-white py-3 rounded-xl hover:bg-green-700 flex items-center justify-center"
+                >
+                  <FaExternalLinkAlt className="mr-2" /> Открыть ссылку
+                </button>
+                <button
+                  onClick={() => {
+                    setShowPaymentModal(false);
+                    setPaymentDetails(null);
+                    setPaymentLink('');
+                  }}
+                  className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl hover:bg-gray-200"
+                >
+                  Закрыть
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Модальное окно создания встречи с пациентом */}
       {showMeetingModal && (
@@ -693,7 +1509,6 @@ const DoctorAppointments = () => {
             </div>
 
             <div className="p-6">
-              {/* Информация о пациенте */}
               <div className="bg-blue-50 rounded-xl p-4 mb-6 border border-blue-100">
                 <div className="flex items-center mb-3">
                   <div className="p-2 bg-white rounded-lg mr-3 border border-blue-200">
@@ -788,11 +1603,10 @@ const DoctorAppointments = () => {
                   <button
                     onClick={sendInvite}
                     disabled={sendingInvite || !inviteEmail.trim()}
-                    className={`w-full py-3.5 rounded-xl text-white font-medium flex items-center justify-center ${
-                      sendingInvite || !inviteEmail.trim()
+                    className={`w-full py-3.5 rounded-xl text-white font-medium flex items-center justify-center ${sendingInvite || !inviteEmail.trim()
                         ? 'bg-gray-400 cursor-not-allowed'
                         : 'bg-purple-600 hover:bg-purple-700'
-                    }`}
+                      }`}
                   >
                     {sendingInvite ? (
                       <>
@@ -864,11 +1678,10 @@ const DoctorAppointments = () => {
                 <button
                   onClick={shareMeetingWithDoctor}
                   disabled={sharing || !selectedDoctorId}
-                  className={`flex-1 py-3 rounded-xl font-medium flex items-center justify-center ${
-                    !selectedDoctorId || sharing
+                  className={`flex-1 py-3 rounded-xl font-medium flex items-center justify-center ${!selectedDoctorId || sharing
                       ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                       : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                  }`}
+                    }`}
                 >
                   {sharing ? (
                     <>

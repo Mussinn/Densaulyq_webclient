@@ -3,8 +3,10 @@ import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import api from "../../utils/api";
-import { FaShieldAlt, FaLock, FaUserMd, FaVideo, FaRobot, FaKey, FaHeartbeat } from "react-icons/fa";
-import { GiHealthPotion, GiStethoscope, GiMedicalPack, GiHealing } from "react-icons/gi";
+import { 
+  FaEye, FaComments, FaBrain, FaVideo, FaCalendarAlt, 
+  FaDatabase, FaKey, FaArrowRight 
+} from "react-icons/fa";
 
 const HomePage = () => {
   const [user, setUser] = useState(null);
@@ -12,7 +14,6 @@ const HomePage = () => {
   const { token, roles } = useSelector((state) => state.token);
   const navigate = useNavigate();
 
-  // Fetch user data
   useEffect(() => {
     const fetchUser = async () => {
       if (token) {
@@ -21,10 +22,9 @@ const HomePage = () => {
           const res = await api.get("/api/v1/users/me", {
             headers: { Authorization: `Bearer ${token}` },
           });
-          console.log("Пайдаланушы мәліметтері:", res.data);
           setUser(res.data);
         } catch (err) {
-          console.error("Пайдаланушы мәліметтерін алу қатесі:", err);
+          console.error("Қате:", err);
           setError("Пайдаланушы мәліметтерін алу мүмкін болмады.");
         }
       }
@@ -32,367 +32,302 @@ const HomePage = () => {
     fetchUser();
   }, [token]);
 
-  const handleNavigate = (path) => {
-    navigate(path);
-  };
-
-  // Animation variants
-  const pageVariants = {
-    hidden: { opacity: 0 },
-    visible: { opacity: 1, transition: { duration: 0.5 } }
-  };
-
-  const sectionVariants = {
-    hidden: { opacity: 0, y: 50 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.6 } },
-  };
-
-  const cardVariants = {
-    hidden: { opacity: 0, scale: 0.8 },
-    visible: { opacity: 1, scale: 1, transition: { duration: 0.4 } },
-  };
-
-  const bounceVariants = {
-    hover: { y: -5, transition: { type: "spring", stiffness: 300 } }
-  };
-
-  const features = [
+  const modules = [
     {
-      icon: <FaLock className="text-emerald-600 text-2xl" />,
-      title: "RSA Шифрлау",
-      description: "Медициналық деректерді RSA алгоритмімен шифрлау арқылы қорғаймыз.",
-      color: "emerald"
+      icon: <FaEye />,
+      name: "DensVision",
+      description: "Медициналық бейнелерді талдау және диагностика",
+      color: "from-blue-500 to-cyan-500",
+      path: "/derm-AI"
     },
     {
-      icon: <FaKey className="text-blue-600 text-2xl" />,
-      title: "Жеке Кілттер",
-      description: "Әр пайдаланушыға жеке кілттер арқылы қауіпсіз және ыңғайлы кіру.",
-      color: "blue"
+      icon: <FaComments />,
+      name: "DensTalk",
+      description: "Науқастармен байланыс және консультациялар",
+      color: "from-emerald-500 to-teal-500",
+      path: "/messenger"
     },
     {
-      icon: <GiStethoscope className="text-purple-600 text-2xl" />,
-      title: "Телемедицина",
-      description: "Дәрігерлермен қауіпсіз бейнеконсультация және диагноз беру.",
-      color: "purple"
+      icon: <FaBrain />,
+      name: "DensAI",
+      description: "AI көмекшісі және симптомдарды талдау",
+      color: "from-purple-500 to-violet-500",
+      path: "/ai"
     },
     {
-      icon: <FaRobot className="text-orange-600 text-2xl" />,
-      title: "AI Диагностика",
-      description: "Жасанды интеллект арқылы симптомдарды талдау және жеделдікті бағалау.",
-      color: "orange"
+      icon: <FaVideo />,
+      name: "DensMeet",
+      description: "Дәрігермен бейнеконсультация",
+      color: "from-orange-500 to-red-500",
+      path: "/meet"
     },
     {
-      icon: <FaShieldAlt className="text-red-600 text-2xl" />,
-      title: "Қауіпсіздік Аудиті",
-      description: "Барлық әрекеттерді бақылау және қауіпсіздікті қамтамасыз ету.",
-      color: "red"
+      icon: <FaCalendarAlt />,
+      name: "DensBook",
+      description: "Жазылу, расписание және төлем",
+      color: "from-pink-500 to-rose-500",
+      path: "/booking"
     },
     {
-      icon: <GiMedicalPack className="text-teal-600 text-2xl" />,
-      title: "Деректер Қорғау",
-      description: "Деректерді Қазақстан заңдарына сәйкес қорғау және сақтау.",
-      color: "teal"
+      icon: <FaDatabase />,
+      name: "DensVault",
+      description: "Медициналық деректерді қауіпсіз сақтау",
+      color: "from-indigo-500 to-blue-500",
+      path: "/medical-tests"
     },
+    {
+      icon: <FaKey />,
+      name: "DensKey",
+      description: "RSA шифрлау және қауіпсіздік",
+      color: "from-slate-600 to-gray-700",
+      path: "/diagnosis/key-generation"
+    }
   ];
 
-  const quickActions = [
-    {
-      icon: <FaVideo className="text-white text-xl" />,
-      title: "Бейнеконсультация",
-      description: "Дәрігермен қауіпсіз бейнебайланыс",
-      path: "/video-conference",
-      color: "from-blue-500 to-sky-500"
-    },
-    {
-      icon: <FaRobot className="text-white text-xl" />,
-      title: "AI Диагностика",
-      description: "Симптомдарды талдау",
-      path: "/ai",
-      color: "from-emerald-500 to-teal-500"
-    },
-    {
-      icon: <FaKey className="text-white text-xl" />,
-      title: "Кілттер",
-      description: "RSA кілттерін басқару",
-      path: "/diagnosis/key-generation",
-      color: "from-purple-500 to-violet-500"
-    },
-    {
-      icon: <FaLock className="text-white text-xl" />,
-      title: "Диагноз Шешу",
-      description: "Шифрленген диагнозды оқу",
-      path: "/diagnosis/view",
-      color: "from-orange-500 to-red-500"
-    },
+  const features = [
+    "RSA шифрлау және қауіпсіздік",
+    "AI диагностика және талдау",
+    "Дәрігермен бейнеконсультация",
+    "Деректерді қауіпсіз сақтау"
   ];
 
   return (
-    <motion.div 
-      className="min-h-screen bg-gradient-to-br from-sky-50 to-emerald-50"
-      initial="hidden"
-      animate="visible"
-      variants={pageVariants}
-    >
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-emerald-50">
       {/* Hero Section */}
-      <motion.header
-        className="flex flex-col items-center justify-center text-center py-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 text-white w-full relative overflow-hidden"
-        initial="hidden"
-        animate="visible"
-        variants={sectionVariants}
-        aria-labelledby="hero-heading"
-      >
-        {/* Декоративные элементы */}
-        <div className="absolute top-0 left-0 w-64 h-64 bg-white/10 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
-        <div className="absolute bottom-0 right-0 w-96 h-96 bg-white/5 rounded-full translate-x-1/3 translate-y-1/3"></div>
+      <section className="relative overflow-hidden bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
+        <div className="absolute inset-0 bg-black/5"></div>
+        <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-white/5 rounded-full blur-3xl"></div>
         
-        <div className="relative z-10">
-          <div className="w-24 h-24 bg-white/20 rounded-2xl flex items-center justify-center mb-6 mx-auto backdrop-blur-sm border border-white/30">
-            <GiHealthPotion className="text-white text-4xl" />
-          </div>
-          
-          <h1 id="hero-heading" className="text-4xl md:text-6xl font-bold mb-6">
-            <span className="block">Densaulyq</span>
-            <span className="text-2xl md:text-3xl font-normal opacity-90">Медициналық Платформа</span>
-          </h1>
-          
-          <p className="text-lg md:text-xl mb-8 max-w-3xl mx-auto opacity-90">
-            Қазақстандық медициналық қызметтер платформасы. 
-            Медициналық деректерді қауіпсіз сақтау және өңдеу жүйесі. 
-            RSA шифрлауы мен жеке кілттер арқылы сіздің құпиялылығыңызды қамтамасыз етеміз.
-          </p>
-          
-          {user ? (
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button
-                onClick={() => handleNavigate("/dashboard")}
-                className="bg-white text-emerald-600 px-8 py-3 rounded-xl font-semibold hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-white transition duration-200 shadow-lg hover:shadow-xl"
-                aria-label="Дашбордқа өту"
-              >
-                Дашбордқа Өту
-              </button>
-              <button
-                onClick={() => handleNavigate("/ai")}
-                className="bg-transparent border-2 border-white text-white px-8 py-3 rounded-xl font-semibold hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white transition duration-200"
-                aria-label="AI Көмекші"
-              >
-                AI Көмекшісі
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button
-                onClick={() => handleNavigate("/login")}
-                className="bg-white text-emerald-600 px-8 py-3 rounded-xl font-semibold hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-white transition duration-200 shadow-lg hover:shadow-xl"
-                aria-label="Кіру"
-              >
-                Кіру
-              </button>
-              <button
-                onClick={() => handleNavigate("/register")}
-                className="bg-transparent border-2 border-white text-white px-8 py-3 rounded-xl font-semibold hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white transition duration-200"
-                aria-label="Тіркелу"
-              >
-                Тіркелу
-              </button>
-            </div>
-          )}
-        </div>
-      </motion.header>
-
-      {/* Жедел Әрекеттер (егер тіркелген болса) */}
-      {user && (
-        <motion.section
-          className="py-12 px-4 sm:px-6 lg:px-8 w-full"
-          initial="hidden"
-          animate="visible"
-          variants={sectionVariants}
-          aria-labelledby="quick-actions-heading"
-        >
-          <div className="max-w-7xl mx-auto">
-            <h2 id="quick-actions-heading" className="text-2xl md:text-3xl font-bold text-center text-gray-800 mb-8 flex items-center justify-center">
-              <GiHealing className="mr-3 text-emerald-600" />
-              Жедел Әрекеттер
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {quickActions.map((action, index) => (
-                <motion.div
-                  key={index}
-                  className="relative group cursor-pointer"
-                  variants={cardVariants}
-                  initial="hidden"
-                  animate="visible"
-                  whileHover="hover"
-                  onClick={() => handleNavigate(action.path)}
-                >
-                  <motion.div 
-                    className={`bg-gradient-to-br ${action.color} rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-all duration-300 h-full`}
-                    variants={bounceVariants}
-                  >
-                    <div className="flex items-start mb-4">
-                      <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center mr-4">
-                        {action.icon}
-                      </div>
-                      <div>
-                        <h3 className="text-xl font-bold">{action.title}</h3>
-                        <p className="text-sm opacity-90 mt-1">{action.description}</p>
-                      </div>
-                    </div>
-                    <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                      </svg>
-                    </div>
-                  </motion.div>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </motion.section>
-      )}
-
-      {/* Мүмкіндіктер Бөлімі */}
-      <motion.section
-        className="py-16 px-4 sm:px-6 lg:px-8 w-full"
-        initial="hidden"
-        animate="visible"
-        variants={sectionVariants}
-        aria-labelledby="features-heading"
-      >
-        <div className="max-w-7xl mx-auto">
-          <h2 id="features-heading" className="text-3xl md:text-4xl font-bold text-center text-gray-800 mb-12 flex items-center justify-center">
-            <FaShieldAlt className="mr-3 text-emerald-600" />
-            Densaulyq Жүйесінің Мүмкіндіктері
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {features.map((feature, index) => (
-              <motion.div
-                key={index}
-                className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-shadow duration-300 border border-gray-100"
-                variants={cardVariants}
-                initial="hidden"
-                animate="visible"
-                whileHover={{ scale: 1.03 }}
-              >
-                <div className={`w-14 h-14 bg-${feature.color}-100 rounded-xl flex items-center justify-center mb-4`}>
-                  {feature.icon}
-                </div>
-                <h3 className="text-xl font-semibold text-gray-800 mb-3">{feature.title}</h3>
-                <p className="text-gray-600">{feature.description}</p>
-                <div className={`mt-4 h-1 w-12 bg-${feature.color}-500 rounded-full`}></div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </motion.section>
-
-      {/* Тіркелген Пайдаланушы Бөлімі */}
-      {user && (
-        <motion.section
-          className="py-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-emerald-50 to-teal-50 w-full"
-          initial="hidden"
-          animate="visible"
-          variants={sectionVariants}
-          aria-labelledby="welcome-heading"
-        >
-          <div className="max-w-4xl mx-auto text-center">
-            <div className="w-20 h-20 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
-              <FaUserMd className="text-white text-2xl" />
-            </div>
+        <div className="relative max-w-7xl mx-auto px-6 py-24 text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+          >
+            <h1 className="text-5xl md:text-7xl font-bold mb-4">
+              Densaulyq
+            </h1>
+            <p className="text-xl md:text-2xl mb-12 opacity-90">
+              Медициналық Платформа
+            </p>
             
-            <h2 id="welcome-heading" className="text-3xl font-bold text-gray-800 mb-4">
+            {user ? (
+              <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                <motion.button
+                  onClick={() => navigate("/dashboard")}
+                  className="bg-white text-emerald-600 px-8 py-4 rounded-xl font-semibold hover:bg-emerald-50 shadow-xl hover:shadow-2xl transition-all duration-200 flex items-center gap-2"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  Дашбордқа өту
+                  <FaArrowRight className="text-sm" />
+                </motion.button>
+              </div>
+            ) : (
+              <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                <motion.button
+                  onClick={() => navigate("/register")}
+                  className="bg-white text-emerald-600 px-8 py-4 rounded-xl font-semibold hover:bg-emerald-50 shadow-xl hover:shadow-2xl transition-all duration-200"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  Тіркелу
+                </motion.button>
+                <motion.button
+                  onClick={() => navigate("/login")}
+                  className="border-2 border-white text-white px-8 py-4 rounded-xl font-semibold hover:bg-white/10 transition-all duration-200"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  Кіру
+                </motion.button>
+              </div>
+            )}
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Platform Modules */}
+      <section className="max-w-7xl mx-auto px-6 py-20">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+          className="text-center mb-16"
+        >
+          <h2 className="text-4xl font-bold text-gray-900 mb-4">
+            Платформа Модульдері
+          </h2>
+          <p className="text-gray-600 text-lg max-w-2xl mx-auto">
+            Densaulyq — заманауи медициналық қызметтер экожүйесі
+          </p>
+        </motion.div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {modules.map((module, index) => (
+            <motion.div
+              key={module.name}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: index * 0.1 }}
+              whileHover={{ y: -8 }}
+              onClick={() => navigate(module.path)}
+              className="group cursor-pointer"
+            >
+              <div className={`relative bg-gradient-to-br ${module.color} rounded-2xl p-6 h-full text-white shadow-lg hover:shadow-2xl transition-all duration-300`}>
+                <div className="text-4xl mb-4 opacity-90">
+                  {module.icon}
+                </div>
+                <h3 className="text-2xl font-bold mb-2">
+                  {module.name}
+                </h3>
+                <p className="text-sm opacity-90 leading-relaxed">
+                  {module.description}
+                </p>
+                <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                  <FaArrowRight className="text-xl" />
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </section>
+
+      {/* Features Section */}
+      <section className="bg-gradient-to-br from-gray-50 to-slate-100 py-20">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6 }}
+            >
+              <h2 className="text-4xl font-bold text-gray-900 mb-6">
+                Неліктен Densaulyq?
+              </h2>
+              <p className="text-gray-600 text-lg mb-8">
+                Қазақстандағы ең қауіпсіз және заманауи медициналық платформа
+              </p>
+              <div className="space-y-4">
+                {features.map((feature, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.4, delay: index * 0.1 }}
+                    className="flex items-center gap-3"
+                  >
+                    <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
+                    <span className="text-gray-700 font-medium">{feature}</span>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6 }}
+              className="relative"
+            >
+              <div className="bg-white rounded-3xl p-8 shadow-2xl border border-gray-100">
+                <div className="space-y-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
+                      <FaKey className="text-emerald-600 text-xl" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-900">DensKey</h4>
+                      <p className="text-sm text-gray-600">RSA шифрлау</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                      <FaDatabase className="text-blue-600 text-xl" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-900">DensVault</h4>
+                      <p className="text-sm text-gray-600">Қауіпсіз сақтау</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                      <FaBrain className="text-purple-600 text-xl" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-900">DensAI</h4>
+                      <p className="text-sm text-gray-600">AI диагностика</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </section>
+
+      {/* User Welcome Section */}
+      {user && (
+        <section className="max-w-7xl mx-auto px-6 py-20">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-3xl p-12 text-white text-center shadow-2xl"
+          >
+            <h2 className="text-3xl font-bold mb-2">
               Қош келдіңіз, {user.firstName} {user.lastName}!
             </h2>
-            
-            <div className="inline-flex items-center bg-white px-4 py-2 rounded-full mb-6 shadow-sm">
-              <span className="text-emerald-600 font-medium">
-                Рөліңіз: {roles.map(role => {
-                  switch(role) {
-                    case 'ROLE_USER': return 'Науқас';
-                    case 'ROLE_DOCTOR': return 'Дәрігер';
-                    default: return role;
-                  }
-                }).join(', ')}
-              </span>
-            </div>
-            
-            <div className="flex flex-wrap gap-4 justify-center mt-8">
-              <button
-                onClick={() => handleNavigate("/dashboard")}
-                className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-8 py-3 rounded-xl font-semibold hover:from-emerald-600 hover:to-teal-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition duration-200 shadow-md hover:shadow-lg"
-                aria-label="Жеке кабинетке өту"
-              >
-                Жеке Кабинетке Өту
-              </button>
-              <button
-                onClick={() => handleNavigate("/video-conference")}
-                className="bg-white text-emerald-600 border-2 border-emerald-500 px-8 py-3 rounded-xl font-semibold hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition duration-200"
-                aria-label="Бейнеконсультация"
-              >
-                Бейнеконсультация
-              </button>
-            </div>
-          </div>
-        </motion.section>
+            <p className="text-lg opacity-90 mb-8">
+              Рөліңіз: {roles.includes('ROLE_DOCTOR') ? 'Дәрігер' : 'Науқас'}
+            </p>
+            <motion.button
+              onClick={() => navigate("/dashboard")}
+              className="bg-white text-emerald-600 px-8 py-4 rounded-xl font-semibold hover:bg-emerald-50 shadow-lg hover:shadow-xl transition-all duration-200"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              Жеке Кабинет
+            </motion.button>
+          </motion.div>
+        </section>
       )}
 
-      {/* Тіркелмеген Пайдаланушыларға */}
+      {/* CTA Section for Non-Users */}
       {!user && (
-        <motion.section
-          className="py-16 px-4 sm:px-6 lg:px-8 w-full"
-          initial="hidden"
-          animate="visible"
-          variants={sectionVariants}
-          aria-labelledby="cta-heading"
-        >
-          <div className="max-w-4xl mx-auto text-center">
-            <div className="bg-gradient-to-r from-white to-gray-50 rounded-2xl p-8 shadow-lg border border-gray-100">
-              <h2 id="cta-heading" className="text-2xl md:text-3xl font-bold text-gray-800 mb-6">
-                Densaulyq Платформасын Қолдануды Бастаңыз
-              </h2>
-              <p className="text-gray-600 mb-8 max-w-2xl mx-auto">
-                Тіркелу арқылы сіз қауіпсіз медициналық қызметтерге қол жеткізе аласыз, 
-                AI диагностикасын пайдалана аласыз және дәрігерлермен қауіпсіз байланыса аласыз.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <button
-                  onClick={() => handleNavigate("/register")}
-                  className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-8 py-3 rounded-xl font-semibold hover:from-emerald-600 hover:to-teal-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition duration-200 shadow-md hover:shadow-lg"
-                  aria-label="Тегін тіркелу"
-                >
-                  Тегін Тіркелу
-                </button>
-                <button
-                  onClick={() => handleNavigate("/login")}
-                  className="bg-white text-emerald-600 border-2 border-emerald-500 px-8 py-3 rounded-xl font-semibold hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition duration-200"
-                  aria-label="Аккаунтыңыз бар болса"
-                >
-                  Аккаунтым Бар
-                </button>
-              </div>
-            </div>
-          </div>
-        </motion.section>
+        <section className="max-w-7xl mx-auto px-6 py-20">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white rounded-3xl p-12 text-center shadow-xl border border-gray-100"
+          >
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">
+              Бүгін Бастаңыз
+            </h2>
+            <p className="text-gray-600 text-lg mb-8 max-w-2xl mx-auto">
+              Тіркелу тегін және бірнеше минут алады
+            </p>
+            <motion.button
+              onClick={() => navigate("/register")}
+              className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-10 py-4 rounded-xl font-semibold hover:from-emerald-600 hover:to-teal-600 shadow-lg hover:shadow-xl transition-all duration-200"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              Тегін Тіркелу
+            </motion.button>
+          </motion.div>
+        </section>
       )}
 
-      {/* Қате Хабарламасы */}
+      {/* Error Message */}
       {error && (
-        <motion.div
-          className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-8"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          <div className="bg-gradient-to-r from-red-50 to-orange-50 border-l-4 border-red-500 text-red-700 p-4 rounded-lg">
-            <div className="flex items-center">
-              <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-              {error}
-            </div>
+        <div className="max-w-7xl mx-auto px-6 mb-8">
+          <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded-lg">
+            {error}
           </div>
-        </motion.div>
+        </div>
       )}
-    </motion.div>
+    </div>
   );
 };
 

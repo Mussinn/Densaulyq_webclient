@@ -1,6 +1,6 @@
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
-import { FaSignOutAlt, FaUserCircle, FaFileMedical, FaVideo, FaRobot, FaChevronDown } from 'react-icons/fa';
+import { FaSignOutAlt, FaUserCircle, FaFileMedical, FaVideo, FaHistory, FaChartLine, FaRobot, FaChevronDown } from 'react-icons/fa';
 import { GiHealthPotion, GiHealthDecrease, GiStethoscope, GiHeartPlus } from 'react-icons/gi';
 import { MdHealthAndSafety, MdDashboard, MdAudiotrack, MdLocalHospital } from 'react-icons/md';
 import { BiMessageSquareDetail } from 'react-icons/bi';
@@ -125,8 +125,7 @@ function Layout() {
   };
 
   const linkClass = ({ isActive }) =>
-    `transition-all duration-300 hover:text-sky-300 hover:bg-white/10 px-3 py-2 rounded-lg flex items-center ${
-      isActive ? 'text-sky-300 font-semibold bg-white/5 border-l-4 border-sky-300' : 'text-gray-100'
+    `transition-all duration-300 hover:text-sky-300 hover:bg-white/10 px-3 py-2 rounded-lg flex items-center ${isActive ? 'text-sky-300 font-semibold bg-white/5 border-l-4 border-sky-300' : 'text-gray-100'
     }`;
 
   const dropdownLinkClass = 'block px-4 py-2.5 text-gray-700 hover:bg-emerald-50 hover:text-emerald-600 transition-colors duration-200 rounded-lg flex items-center';
@@ -134,6 +133,7 @@ function Layout() {
   // Check roles
   const isUser = roles.includes('ROLE_USER');
   const isDoctor = roles.includes('ROLE_DOCTOR');
+  const isAdmin = roles.includes('ROLE_ADMIN');
 
   // Animation variants
   const profileVariants = {
@@ -148,15 +148,15 @@ function Layout() {
 
   const dropdownVariants = {
     hidden: { opacity: 0, y: -10, scale: 0.95 },
-    visible: { 
-      opacity: 1, 
-      y: 0, 
+    visible: {
+      opacity: 1,
+      y: 0,
       scale: 1,
       transition: { duration: 0.2, ease: 'easeOut' }
     },
-    exit: { 
-      opacity: 0, 
-      y: -10, 
+    exit: {
+      opacity: 0,
+      y: -10,
       scale: 0.95,
       transition: { duration: 0.15 }
     }
@@ -203,15 +203,23 @@ function Layout() {
                     </NavLink>
                     <NavLink to="/doctor-appointments" className={linkClass}>
                       <MdLocalHospital className="mr-2" />
-                      Жазылу тізімі
+                      DensBooking тізімі
                     </NavLink>
                     <NavLink to="/doctor-consultations" className={linkClass}>
                       <MdLocalHospital className="mr-2" />
                       Консультациялар
                     </NavLink>
-                    <NavLink to="/audit/logs" className={linkClass}>
+                    {/* <NavLink to="/audit/logs" className={linkClass}>
                       <MdAudiotrack className="mr-2" />
                       Аудит
+                    </NavLink> */}
+                    <NavLink to="/medical-history" className={linkClass}>
+                      <FaHistory className="mr-2" />
+                      DensVault
+                    </NavLink>
+                    <NavLink to="/derm-AI" className={linkClass}>
+                      <FaRobot className="mr-2" />
+                      DensVision
                     </NavLink>
                     <NavLink to="/diagnosis/create" className={linkClass}>
                       <GiStethoscope className="mr-2" />
@@ -219,11 +227,27 @@ function Layout() {
                     </NavLink>
                     <NavLink to="/messenger" className={linkClass}>
                       <BiMessageSquareDetail className="mr-2" />
-                      Messenger
+                      DensTalk
                     </NavLink>
                   </>
                 )}
-                
+                {isAdmin && (
+                  <>
+                    <NavLink to="/admin" className={linkClass}>
+                      <MdDashboard className="mr-2" />
+                      Әкімші панелі
+                    </NavLink>
+                    <NavLink to="/dashboard" className={linkClass}>
+                      <FaChartLine className="mr-2" />
+                      Дашборд
+                    </NavLink>
+                    <NavLink to="/audit/logs" className={linkClass}>
+                      <MdAudiotrack className="mr-2" />
+                      Аудит логтары
+                    </NavLink>
+                  </>
+                )}
+
                 {isUser && (
                   <>
                     <NavLink to="/home" className={linkClass}>
@@ -235,15 +259,14 @@ function Layout() {
                     <div className="relative" ref={aiDropdownRef}>
                       <button
                         onClick={() => toggleDropdown('ai')}
-                        className={`transition-all duration-300 hover:text-sky-300 hover:bg-white/10 px-3 py-2 rounded-lg flex items-center text-gray-100 ${
-                          dropdowns.ai ? 'bg-white/10 text-sky-300' : ''
-                        }`}
+                        className={`transition-all duration-300 hover:text-sky-300 hover:bg-white/10 px-3 py-2 rounded-lg flex items-center text-gray-100 ${dropdowns.ai ? 'bg-white/10 text-sky-300' : ''
+                          }`}
                       >
                         <FaRobot className="mr-2" />
                         AI Қызметтер
                         <FaChevronDown className={`ml-1 w-3 h-3 transition-transform duration-200 ${dropdowns.ai ? 'rotate-180' : ''}`} />
                       </button>
-                      
+
                       <AnimatePresence>
                         {dropdowns.ai && (
                           <motion.div
@@ -253,37 +276,26 @@ function Layout() {
                             exit="exit"
                             className="absolute top-full left-0 mt-2 w-64 bg-white rounded-xl shadow-2xl py-2 z-50 border border-gray-100"
                           >
-                            <NavLink 
-                              to="/derm-AI" 
+                            <NavLink
+                              to="/derm-AI"
                               className={dropdownLinkClass}
                               onClick={closeAllDropdowns}
                             >
                               <FaRobot className="mr-3 text-purple-500" />
                               <div>
-                                <div className="font-medium">AI Көмекші 2.0</div>
+                                <div className="font-medium">DensVision</div>
                                 <div className="text-xs text-gray-500">Жаңартылған нұсқа</div>
                               </div>
                             </NavLink>
-                            <NavLink 
-                              to="/ai" 
+                            <NavLink
+                              to="/ai"
                               className={dropdownLinkClass}
                               onClick={closeAllDropdowns}
                             >
                               <FaRobot className="mr-3 text-blue-500" />
                               <div>
-                                <div className="font-medium">AI Диагностика</div>
+                                <div className="font-medium">DensAI</div>
                                 <div className="text-xs text-gray-500">Симптомдарды тексеру</div>
-                              </div>
-                            </NavLink>
-                            <NavLink 
-                              to="/medical-tests" 
-                              className={dropdownLinkClass}
-                              onClick={closeAllDropdowns}
-                            >
-                              <FaFileMedical className="mr-3 text-teal-500" />
-                              <div>
-                                <div className="font-medium">Медициналық сынақтар</div>
-                                <div className="text-xs text-gray-500">Анализдер мен тесттер</div>
                               </div>
                             </NavLink>
                           </motion.div>
@@ -295,15 +307,14 @@ function Layout() {
                     <div className="relative" ref={consultDropdownRef}>
                       <button
                         onClick={() => toggleDropdown('consult')}
-                        className={`transition-all duration-300 hover:text-sky-300 hover:bg-white/10 px-3 py-2 rounded-lg flex items-center text-gray-100 ${
-                          dropdowns.consult ? 'bg-white/10 text-sky-300' : ''
-                        }`}
+                        className={`transition-all duration-300 hover:text-sky-300 hover:bg-white/10 px-3 py-2 rounded-lg flex items-center text-gray-100 ${dropdowns.consult ? 'bg-white/10 text-sky-300' : ''
+                          }`}
                       >
                         <GiStethoscope className="mr-2" />
                         Консультациялар
                         <FaChevronDown className={`ml-1 w-3 h-3 transition-transform duration-200 ${dropdowns.consult ? 'rotate-180' : ''}`} />
                       </button>
-                      
+
                       <AnimatePresence>
                         {dropdowns.consult && (
                           <motion.div
@@ -313,8 +324,8 @@ function Layout() {
                             exit="exit"
                             className="absolute top-full left-0 mt-2 w-64 bg-white rounded-xl shadow-2xl py-2 z-50 border border-gray-100"
                           >
-                            <NavLink 
-                              to="/doctors" 
+                            <NavLink
+                              to="/doctors"
                               className={dropdownLinkClass}
                               onClick={closeAllDropdowns}
                             >
@@ -324,36 +335,36 @@ function Layout() {
                                 <div className="text-xs text-gray-500">Маман таңдау</div>
                               </div>
                             </NavLink>
-                            <NavLink 
-                              to="/booking" 
+                            <NavLink
+                              to="/booking"
                               className={dropdownLinkClass}
                               onClick={closeAllDropdowns}
                             >
                               <FaUserCircle className="mr-3 text-sky-500" />
                               <div>
-                                <div className="font-medium">Жазылу</div>
+                                <div className="font-medium">DensBooking</div>
                                 <div className="text-xs text-gray-500">Қабылдауға жазылу</div>
                               </div>
                             </NavLink>
-                            <NavLink 
-                              to="/meet" 
+                            <NavLink
+                              to="/meet"
                               className={dropdownLinkClass}
                               onClick={closeAllDropdowns}
                             >
                               <FaVideo className="mr-3 text-red-500" />
                               <div>
-                                <div className="font-medium">Бейнеконсультация</div>
+                                <div className="font-medium">DensMeet</div>
                                 <div className="text-xs text-gray-500">Онлайн кеңес</div>
                               </div>
                             </NavLink>
-                            <NavLink 
-                              to="/messenger" 
+                            <NavLink
+                              to="/messenger"
                               className={dropdownLinkClass}
                               onClick={closeAllDropdowns}
                             >
                               <BiMessageSquareDetail className="mr-3 text-indigo-500" />
                               <div>
-                                <div className="font-medium">Messenger</div>
+                                <div className="font-medium">DensTalk</div>
                                 <div className="text-xs text-gray-500">Хабарласу</div>
                               </div>
                             </NavLink>
@@ -366,15 +377,14 @@ function Layout() {
                     <div className="relative" ref={healthDropdownRef}>
                       <button
                         onClick={() => toggleDropdown('health')}
-                        className={`transition-all duration-300 hover:text-sky-300 hover:bg-white/10 px-3 py-2 rounded-lg flex items-center text-gray-100 ${
-                          dropdowns.health ? 'bg-white/10 text-sky-300' : ''
-                        }`}
+                        className={`transition-all duration-300 hover:text-sky-300 hover:bg-white/10 px-3 py-2 rounded-lg flex items-center text-gray-100 ${dropdowns.health ? 'bg-white/10 text-sky-300' : ''
+                          }`}
                       >
                         <GiHealthPotion className="mr-2" />
                         Менің денсаулығым
                         <FaChevronDown className={`ml-1 w-3 h-3 transition-transform duration-200 ${dropdowns.health ? 'rotate-180' : ''}`} />
                       </button>
-                      
+
                       <AnimatePresence>
                         {dropdowns.health && (
                           <motion.div
@@ -384,8 +394,8 @@ function Layout() {
                             exit="exit"
                             className="absolute top-full left-0 mt-2 w-64 bg-white rounded-xl shadow-2xl py-2 z-50 border border-gray-100"
                           >
-                            <NavLink 
-                              to="/profile" 
+                            <NavLink
+                              to="/profile"
                               className={dropdownLinkClass}
                               onClick={closeAllDropdowns}
                             >
@@ -395,8 +405,8 @@ function Layout() {
                                 <div className="text-xs text-gray-500">Профиль мәліметтері</div>
                               </div>
                             </NavLink>
-                            <NavLink 
-                              to="/diagnosis/view" 
+                            <NavLink
+                              to="/diagnosis/view"
                               className={dropdownLinkClass}
                               onClick={closeAllDropdowns}
                             >
@@ -406,15 +416,26 @@ function Layout() {
                                 <div className="text-xs text-gray-500">Медициналық карта</div>
                               </div>
                             </NavLink>
-                            <NavLink 
-                              to="/diagnosis/key-generation" 
+                            <NavLink
+                              to="/diagnosis/key-generation"
                               className={dropdownLinkClass}
                               onClick={closeAllDropdowns}
                             >
                               <GiHeartPlus className="mr-3 text-pink-500" />
                               <div>
-                                <div className="font-medium">Кілт генерациясы</div>
+                                <div className="font-medium">DensKey</div>
                                 <div className="text-xs text-gray-500">Қауіпсіздік кілті</div>
+                              </div>
+                            </NavLink>
+                            <NavLink
+                              to="/medical-tests"
+                              className={dropdownLinkClass}
+                              onClick={closeAllDropdowns}
+                            >
+                              <FaFileMedical className="mr-3 text-teal-500" />
+                              <div>
+                                <div className="font-medium">DensVault</div>
+                                <div className="text-xs text-gray-500">Анализдер мен тесттер</div>
                               </div>
                             </NavLink>
                           </motion.div>
@@ -521,7 +542,7 @@ function Layout() {
                     </NavLink>
                     <NavLink to="/doctor-appointments" className={linkClass} onClick={() => setMenuOpen(false)}>
                       <MdLocalHospital className="mr-2" />
-                      Жазылу тізімі
+                      DensBooking
                     </NavLink>
                     <NavLink to="/doctor-consultations" className={linkClass} onClick={() => setMenuOpen(false)}>
                       <MdLocalHospital className="mr-2" />
@@ -537,11 +558,11 @@ function Layout() {
                     </NavLink>
                     <NavLink to="/messenger" className={linkClass} onClick={() => setMenuOpen(false)}>
                       <BiMessageSquareDetail className="mr-2" />
-                      Messenger
+                      DensTalk
                     </NavLink>
                   </>
                 )}
-                
+
                 {isUser && (
                   <>
                     <div className="text-xs font-semibold text-emerald-200 uppercase tracking-wider mb-2 mt-2">
@@ -549,15 +570,15 @@ function Layout() {
                     </div>
                     <NavLink to="/derm-AI" className={linkClass} onClick={() => setMenuOpen(false)}>
                       <FaRobot className="mr-2" />
-                      AI Көмекші 2.0
+                      DensVision
                     </NavLink>
                     <NavLink to="/ai" className={linkClass} onClick={() => setMenuOpen(false)}>
                       <FaRobot className="mr-2" />
-                      AI Диагностика
+                      DensAI
                     </NavLink>
                     <NavLink to="/medical-tests" className={linkClass} onClick={() => setMenuOpen(false)}>
                       <FaFileMedical className="mr-2" />
-                      Медициналық сынақтар
+                      DensVault
                     </NavLink>
 
                     <div className="text-xs font-semibold text-emerald-200 uppercase tracking-wider mb-2 mt-4">
@@ -569,15 +590,15 @@ function Layout() {
                     </NavLink>
                     <NavLink to="/booking" className={linkClass} onClick={() => setMenuOpen(false)}>
                       <FaUserCircle className="mr-2" />
-                      Жазылу
+                      DensBooking
                     </NavLink>
                     <NavLink to="/meet" className={linkClass} onClick={() => setMenuOpen(false)}>
                       <FaVideo className="mr-2" />
-                      Бейнеконсультация
+                      DensMeet
                     </NavLink>
                     <NavLink to="/messenger" className={linkClass} onClick={() => setMenuOpen(false)}>
                       <BiMessageSquareDetail className="mr-2" />
-                      Messenger
+                      DensTalk
                     </NavLink>
 
                     <div className="text-xs font-semibold text-emerald-200 uppercase tracking-wider mb-2 mt-4">
@@ -719,7 +740,7 @@ function Layout() {
                         className="flex items-center px-3 py-2 text-gray-700 hover:bg-emerald-50 hover:text-emerald-600 rounded-lg transition"
                       >
                         <FaRobot className="mr-3" />
-                        AI Диагностика
+                        DensAI
                       </NavLink>
                       <NavLink
                         to="/doctors"
@@ -733,7 +754,7 @@ function Layout() {
                         className="flex items-center px-3 py-2 text-gray-700 hover:bg-purple-50 hover:text-purple-600 rounded-lg transition"
                       >
                         <FaVideo className="mr-3" />
-                        Бейнеконсультация
+                        DensMeet
                       </NavLink>
                     </>
                   )}
@@ -833,7 +854,7 @@ function Layout() {
                   <ul className="space-y-2 text-sm text-gray-400">
                     <li><a href="tel:103" className="hover:text-white transition">103 - Жедел жәрдем</a></li>
                     <li><a href="tel:112" className="hover:text-white transition">112 - Барлық қызметтер</a></li>
-                    <li><NavLink to="/ai" className="hover:text-white transition">AI Диагностика</NavLink></li>
+                    <li><NavLink to="/ai" className="hover:text-white transition">DensAI Диагностика</NavLink></li>
                   </ul>
                 </div>
 

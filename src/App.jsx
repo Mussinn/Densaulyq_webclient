@@ -24,6 +24,7 @@ import DoctorAppointments from "./pages/DoctorAppointments";
 import MedicalTestsPage from "./pages/MedicalTestsPage";
 import DoctorConsultations from "./pages/DoctorConsultations"; 
 import Messenger from "./pages/DoctorMessenger";
+import PatientMedicalHistory from "./pages/PatientMedicalHistory";
 
 function App() {
   const { token: authToken, user } = useSelector((state) => state.token);
@@ -188,6 +189,7 @@ function App() {
         />
 
         <Route element={<Layout />}>
+                <Route path="/medical-history" element={<PrivateRoute><PatientMedicalHistory /></PrivateRoute>} />
         <Route path="/messenger" element={<PrivateRoute><Messenger /></PrivateRoute>} />
         <Route path="/doctor-consultations" element={<PrivateRoute><DoctorConsultations /></PrivateRoute>} />
         <Route path="/medical-tests" element={<PrivateRoute><MedicalTestsPage /></PrivateRoute>} />

@@ -27,10 +27,10 @@ export const stopRingtone = () => {
     ringtoneAudio = null;
   }
 };
-
+///sounds/end-call.mp3
 // Проигрывать звук завершения звонка
 export const playEndCallSound = () => {
-  const audio = new Audio('/sounds/end-call.mp3');
+  const audio = new Audio('../sounds/end-call.mp3');
   audio.volume = 0.5;
   audio.play().catch(e => console.log('End call sound error:', e));
 };

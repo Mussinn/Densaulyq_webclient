@@ -182,21 +182,48 @@ const MedicalTestsPage = () => {
     setShowViewModal(true);
   };
   
-  // Скачивание файла по URL
-  const handleDownloadFile = (url, filename) => {
-    if (!url) return;
+  // Скачивание файла
+  const handleDownloadFile = async (url, filename) => {
+    if (!url) {
+      alert('URL файла не найден');
+      return;
+    }
     
     try {
+      // Открываем файл в новой вкладке для скачивания
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Ошибка при скачивании файла');
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = url;
+      link.href = downloadUrl;
       link.setAttribute('download', filename || 'file');
       document.body.appendChild(link);
       link.click();
       link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+      
     } catch (err) {
       console.error('Ошибка скачивания файла:', err);
-      alert('Ошибка скачивания файла');
+      alert('Ошибка скачивания файла. Попробуйте открыть файл в новой вкладке.');
+      
+      // Резервный метод - открыть в новой вкладке
+      window.open(url, '_blank');
     }
+  };
+  
+  // Просмотр изображения
+  const handleViewImage = (url) => {
+    if (!url) return;
+    window.open(url.replace('/files/', '/files/view/'), '_blank');
   };
   
   // Обработчики файлов
@@ -275,7 +302,7 @@ const MedicalTestsPage = () => {
   const formatDate = (dateString) => {
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString('kk-KZ', {
+      return date.toLocaleDateString('ru-RU', {
         day: 'numeric',
         month: 'long',
         year: 'numeric',
@@ -527,12 +554,20 @@ const MedicalTestsPage = () => {
                         )}
                         
                         {test.imageUrl && (
-                          <button
-                            onClick={() => handleDownloadFile(test.imageUrl, getFileNameFromUrl(test.imageUrl))}
-                            className="px-4 py-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors flex items-center justify-center text-sm font-medium"
-                          >
-                            <FaFileImage className="mr-2" /> Скачать снимок
-                          </button>
+                          <>
+                            <button
+                              onClick={() => handleViewImage(test.imageUrl)}
+                              className="px-4 py-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors flex items-center justify-center text-sm font-medium"
+                            >
+                              <FaEye className="mr-2" /> Просмотр снимка
+                            </button>
+                            <button
+                              onClick={() => handleDownloadFile(test.imageUrl, getFileNameFromUrl(test.imageUrl))}
+                              className="px-4 py-2 bg-purple-500 text-white rounded-xl hover:bg-purple-600 transition-colors flex items-center justify-center text-sm font-medium"
+                            >
+                              <FaDownload className="mr-2" /> Скачать снимок
+                            </button>
+                          </>
                         )}
                         
                         <button

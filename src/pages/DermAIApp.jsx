@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { FaUpload, FaImage, FaChartBar, FaHistory, FaStethoscope, FaExclamationTriangle, FaCheckCircle, FaHeartbeat, FaLungs, FaInfoCircle, FaCloudUploadAlt, FaRedo } from "react-icons/fa";
+import { FaUpload, FaImage, FaChartBar, FaHistory, FaStethoscope, FaExclamationTriangle, FaCheckCircle, FaHeartbeat, FaLungs, FaInfoCircle, FaCloudUploadAlt, FaRedo, FaSave, FaUserInjured } from "react-icons/fa";
+import { useSelector } from 'react-redux';
 import axios from "axios";
+import api from "../../utils/api";
 
-const DermAIApp = () => {
+const DensVision = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [prediction, setPrediction] = useState(null);
@@ -12,13 +14,23 @@ const DermAIApp = () => {
   const [history, setHistory] = useState([]);
   const [modelsInfo, setModelsInfo] = useState({});
   const [apiHealth, setApiHealth] = useState(null);
-  const [analysisType, setAnalysisType] = useState("skin"); // "skin" или "lungs"
+  const [analysisType, setAnalysisType] = useState("skin");
   const [apiStatus, setApiStatus] = useState({
     skin: false,
     lungs: false
   });
 
-  // Базовый URL API - измените если нужно
+  // Для сохранения диагноза (DensAI)
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [patients, setPatients] = useState([]);
+  const [selectedPatientId, setSelectedPatientId] = useState("");
+  const [savingDiagnosis, setSavingDiagnosis] = useState(false);
+  const [medicalRecords, setMedicalRecords] = useState([]);
+  const [selectedRecordId, setSelectedRecordId] = useState("");
+  
+  const { token } = useSelector((state) => state.token);
+
+  // Базовый URL API
   const API_BASE_URL = "http://localhost:8000";
 
   // Проверка здоровья API и статуса моделей
@@ -51,19 +63,47 @@ const DermAIApp = () => {
     }
   };
 
+  // Загрузка списка пациентов
+  const fetchPatients = async () => {
+    try {
+      if (!token) return;
+      const response = await api.get('/api/v1/patient', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setPatients(response.data || []);
+    } catch (err) {
+      console.error('Науқастарды жүктеу қатесі:', err);
+    }
+  };
+
+  // Загрузка медицинских записей для пациента
+  const fetchMedicalRecords = async (patientId) => {
+    try {
+      if (!patientId) return;
+      const response = await api.get(`/api/v1/patient/medical-record/${patientId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setMedicalRecords(response.data || []);
+      if (response.data && response.data.length > 0) {
+        setSelectedRecordId(response.data[0].recordId.toString());
+      }
+    } catch (err) {
+      console.error('Медициналық жазбалар қатесі:', err);
+      setMedicalRecords([]);
+    }
+  };
+
   // Обработчик выбора файла
   const handleFileSelect = (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
-    // Проверка типа файла
     const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/bmp"];
     if (!validTypes.includes(file.type)) {
       setError("Тек JPEG, JPG, PNG, WebP немесе BMP суреттер қабылданады");
       return;
     }
 
-    // Проверка размера файла (макс 10MB)
     if (file.size > 10 * 1024 * 1024) {
       setError("Суреттің көлемі 10MB-тан аспауы тиіс");
       return;
@@ -74,7 +114,6 @@ const DermAIApp = () => {
     setSuccess("");
     setPrediction(null);
 
-    // Создание предпросмотра
     const reader = new FileReader();
     reader.onloadend = () => {
       setPreviewUrl(reader.result);
@@ -89,7 +128,6 @@ const DermAIApp = () => {
       return;
     }
 
-    // Проверка доступности модели
     if (analysisType === "skin" && !apiStatus.skin) {
       setError("Тері диагностикасының моделі жүктелмеген");
       return;
@@ -110,7 +148,6 @@ const DermAIApp = () => {
     try {
       console.log(`${analysisType} анализ басталуда...`);
       
-      // Выбираем endpoint в зависимости от типа анализа
       const endpoint = analysisType === "skin" ? "/predict/skin" : "/predict/lungs";
       const response = await axios.post(`${API_BASE_URL}${endpoint}`, formData, {
         headers: {
@@ -120,7 +157,6 @@ const DermAIApp = () => {
 
       console.log("Нәтиже алынды:", response.data);
       
-      // Форматируем результат для удобного отображения
       const formattedResult = {
         ...response.data,
         prediction: response.data.prediction || "Unknown",
@@ -136,7 +172,6 @@ const DermAIApp = () => {
       
       setPrediction(formattedResult);
       
-      // Сохраняем в историю
       const newHistoryItem = {
         id: Date.now(),
         filename: selectedFile.name,
@@ -145,7 +180,7 @@ const DermAIApp = () => {
         analysis_type: analysisType
       };
       
-      setHistory([newHistoryItem, ...history.slice(0, 9)]); // Храним последние 10 записей
+      setHistory([newHistoryItem, ...history.slice(0, 9)]);
       setSuccess(`${analysisType === "skin" ? "Тері" : "Өкпе"} анализы сәтті аяқталды!`);
       
     } catch (err) {
@@ -161,6 +196,133 @@ const DermAIApp = () => {
     }
   };
 
+  // Открытие модального окна сохранения (DensAI)
+  const openSaveModal = () => {
+    if (!token) {
+      setError("Диагнозды сақтау үшін жүйеге кіріңіз");
+      return;
+    }
+    setShowSaveModal(true);
+    setSelectedPatientId("");
+    setSelectedRecordId("");
+    setMedicalRecords([]);
+  };
+
+  // Сохранение AI диагноза (DensAI)
+  const saveDiagnosis = async () => {
+    if (!selectedPatientId) {
+      setError("Науқасты таңдаңыз");
+      return;
+    }
+
+    if (!selectedRecordId) {
+      setError("Медициналық жазбаны таңдаңыз");
+      return;
+    }
+
+    setSavingDiagnosis(true);
+    setError("");
+
+    try {
+      // Формируем текст диагноза с предупреждением
+      const aiDiagnosisText = `
+╔════════════════════════════════════════════════════════════╗
+║           🤖 DensAI - ЖАСАНДЫ ИНТЕЛЛЕКТ ДИАГНОЗЫ          ║
+╚════════════════════════════════════════════════════════════╝
+
+⚠️ МАҢЫЗДЫ ЕСКЕРТУ:
+Бұл диагноз DensAI жүйесімен автоматты түрде жасалған.
+DensAI 100% дәлдікпен жұмыс істемейді және тек көмекші құрал болып табылады.
+Нақты диагноз қою және емдеуді тағайындау үшін МІНДЕТТІ түрде білікті дәрігерге жүгініңіз.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 ТАЛДАУ ТҮРІ: ${analysisType === "skin" ? "🩺 DensVision - Тері диагностикасы" : "🫁 DensVision - Өкпе диагностикасы"}
+
+🔍 АНЫҚТАЛҒАН ЖАЙ-КҮЙ:
+   ${getClassName(prediction.prediction, prediction.analysis_type)}
+
+📈 DensAI СЕНІМДІЛІГІ: ${prediction.confidence_percentage || `${(prediction.confidence * 100).toFixed(1)}%`}
+
+${getRiskIcon(prediction.risk_level)} ҚАУІП ДЕҢГЕЙІ: ${getRiskText(prediction.risk_level)}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💡 DensAI ҰСЫНЫСЫ:
+${prediction.recommendation}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 БАРЛЫҚ ЫҚТИМАЛДЫҚТАР (DensVision):
+${Object.entries(prediction.all_probabilities || {})
+  .map(([className, data]) => 
+    `   • ${getClassName(className, prediction.analysis_type)}: ${data.percentage || `${((data.probability || 0) * 100).toFixed(1)}%`}`
+  )
+  .join('\n')}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🏥 КЕЛЕСІ ҚАДАМДАР:
+✓ Білікті дәрігерге кеңес алу
+✓ Қосымша тексерулер өткізу
+✓ Нақты диагноз алу
+✓ Емдеу жоспарын құру
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚕️ ДӘРІГЕРГЕ АРНАЛҒАН ЕСКЕРТУ:
+Бұл DensAI талдауы тек бастапқы скрининг мақсатында қолданылады.
+Нақты диагноз қою үшін клиникалық тексеру, анамнез жинау және 
+қосымша зертханалық зерттеулер қажет.
+
+📅 Талдау күні: ${new Date().toLocaleString('kk-KZ')}
+🤖 Модель: ${prediction.model_info?.name || 'DensVision AI'}
+📁 Файл аты: ${selectedFile?.name || 'Белгісіз'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️ ЗАҢДЫ ЕСКЕРТУ:
+DensAI жүйесі медициналық көмекті алмастырмайды. Жүйе әзірлеушілері 
+диагноздың дұрыс болмауы немесе емдеуден туындаған зардаптар үшін 
+жауапты болмайды. Барлық медициналық шешімдер білікті дәрігермен 
+консультациядан кейін қабылдануы тиіс.
+`;
+
+      const payload = {
+        patientId: Number(selectedPatientId),
+        recordId: Number(selectedRecordId),
+        diagnosisText: aiDiagnosisText.trim(),
+      };
+
+      console.log('DensAI диагнозын сақтау:', payload);
+
+      const response = await api.post('/api/v1/diagnosis/create/bot', payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const newDiagnosis = response.data;
+      console.log('DensAI диагноз сақталды:', newDiagnosis);
+
+      setSuccess(`DensAI диагнозы сәтті сақталды! Диагноз ID: ${newDiagnosis.diagnosisId}`);
+      setShowSaveModal(false);
+      
+      // Очищаем форму через 3 секунды
+      setTimeout(() => {
+        setSuccess("");
+      }, 5000);
+
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || err.message || 'Белгісіз қате';
+      setError(`DensAI диагнозды сақтау қатесі: ${errorMessage}`);
+      console.error('Сақтау қатесі:', err.response?.data || err);
+    } finally {
+      setSavingDiagnosis(false);
+    }
+  };
+
   // Очистка формы
   const handleReset = () => {
     setSelectedFile(null);
@@ -173,21 +335,17 @@ const DermAIApp = () => {
   // Загрузка примера изображения
   const loadSampleImage = () => {
     try {
-      // Используем разные примеры для кожи и легких
       let sampleUrl;
       let fileName;
       
       if (analysisType === "skin") {
-        // Пример изображения кожи (используем локальный пример или фиксированную ссылку)
         sampleUrl = "https://images.unsplash.com/photo-1545930748-acae6fbfb3c8?w=400&h=300&fit=crop";
         fileName = "тері_үлгісі.jpg";
       } else {
-        // Пример рентгеновского снимка легких
         sampleUrl = "https://images.unsplash.com/photo-1559757175-0eb30cd8c063?w-400&h=300&fit=crop";
         fileName = "өкпе_үлгісі.jpg";
       }
       
-      // Создаем временную ссылку для предпросмотра
       setPreviewUrl(sampleUrl);
       setSelectedFile(new File([""], fileName, { type: "image/jpeg" }));
       setError("");
@@ -199,7 +357,7 @@ const DermAIApp = () => {
     }
   };
 
-  // Получение названия класса на русском/казахском
+  // Получение названия класса
   const getClassName = (className, type) => {
     if (type === "skin") {
       const skinClasses = {
@@ -224,7 +382,6 @@ const DermAIApp = () => {
     }
   };
 
-  // Получение цвета для уровня риска
   const getRiskColor = (riskLevel) => {
     switch (riskLevel) {
       case "high": return "red";
@@ -234,7 +391,6 @@ const DermAIApp = () => {
     }
   };
 
-  // Получение иконки для уровня риска
   const getRiskIcon = (riskLevel) => {
     switch (riskLevel) {
       case "high": return "⚠️";
@@ -244,7 +400,6 @@ const DermAIApp = () => {
     }
   };
 
-  // Получение перевода уровня риска
   const getRiskText = (riskLevel) => {
     switch (riskLevel) {
       case "high": return "Жоғары қауіп";
@@ -262,8 +417,11 @@ const DermAIApp = () => {
         await fetchModelsInfo();
       }
       
-      // Загружаем историю из localStorage
-      const savedHistory = localStorage.getItem("medical_ai_history");
+      if (token) {
+        await fetchPatients();
+      }
+      
+      const savedHistory = localStorage.getItem("densvision_history");
       if (savedHistory) {
         try {
           setHistory(JSON.parse(savedHistory));
@@ -275,17 +433,22 @@ const DermAIApp = () => {
     
     initApp();
     
-    // Периодически проверяем статус API
     const interval = setInterval(checkApiHealth, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [token]);
 
-  // Сохраняем историю в localStorage
   useEffect(() => {
     if (history.length > 0) {
-      localStorage.setItem("medical_ai_history", JSON.stringify(history));
+      localStorage.setItem("densvision_history", JSON.stringify(history));
     }
   }, [history]);
+
+  // Обработка выбора пациента
+  useEffect(() => {
+    if (selectedPatientId) {
+      fetchMedicalRecords(selectedPatientId);
+    }
+  }, [selectedPatientId]);
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-blue-50 to-cyan-50 flex flex-col">
@@ -295,8 +458,8 @@ const DermAIApp = () => {
           <div className="flex items-center space-x-3 mb-4 sm:mb-0">
             <FaStethoscope className="w-10 h-10 text-cyan-300" />
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold">MedAI - Медициналық Диагностика</h1>
-              <p className="text-sm opacity-90">Тері қатерлі ісігі мен өкпе ауруларын анықтау жүйесі</p>
+              <h1 className="text-2xl md:text-3xl font-bold">DensVision + DensAI</h1>
+              <p className="text-sm opacity-90">Жасанды интеллект негізіндегі медициналық диагностика</p>
             </div>
           </div>
           <div className="flex flex-col items-end">
@@ -307,11 +470,11 @@ const DermAIApp = () => {
                 </div>
                 <div className="text-sm">
                   <div className="flex items-center">
-                    <span className="mr-2">Тері:</span>
+                    <span className="mr-2">DensVision:</span>
                     <span className={`w-3 h-3 rounded-full ${apiStatus.skin ? "bg-green-500" : "bg-red-500"}`}></span>
                   </div>
                   <div className="flex items-center mt-1">
-                    <span className="mr-2">Өкпе:</span>
+                    <span className="mr-2">DensAI:</span>
                     <span className={`w-3 h-3 rounded-full ${apiStatus.lungs ? "bg-green-500" : "bg-red-500"}`}></span>
                   </div>
                 </div>
@@ -338,11 +501,11 @@ const DermAIApp = () => {
       {/* Main Content */}
       <div className="flex-1 container mx-auto p-4 sm:p-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Левая колонка - Загрузка и результаты */}
+          {/* Левая колонка - Загрузка и результаты (DensVision) */}
           <div className="lg:col-span-2 space-y-6">
             {/* Выбор типа анализа */}
             <div className="bg-white rounded-2xl shadow-lg p-5">
-              <h2 className="text-lg font-bold text-gray-800 mb-3">Талдау түрін таңдаңыз:</h2>
+              <h2 className="text-lg font-bold text-gray-800 mb-3">DensVision талдау түрін таңдаңыз:</h2>
               <div className="flex space-x-4">
                 <button
                   onClick={() => setAnalysisType("skin")}
@@ -353,7 +516,7 @@ const DermAIApp = () => {
                   }`}
                 >
                   <FaHeartbeat className="w-8 h-8 mb-2" />
-                  <span className="font-medium">Тері Диагностикасы</span>
+                  <span className="font-medium">DensVision Тері</span>
                   <span className="text-xs mt-1 text-gray-500">
                     {apiStatus.skin ? "✓ Қолжетімді" : "✗ Қолжетімсіз"}
                   </span>
@@ -368,7 +531,7 @@ const DermAIApp = () => {
                   }`}
                 >
                   <FaLungs className="w-8 h-8 mb-2" />
-                  <span className="font-medium">Өкпе Диагностикасы</span>
+                  <span className="font-medium">DensVision Өкпе</span>
                   <span className="text-xs mt-1 text-gray-500">
                     {apiStatus.lungs ? "✓ Қолжетімді" : "✗ Қолжетімсіз"}
                   </span>
@@ -376,11 +539,11 @@ const DermAIApp = () => {
               </div>
             </div>
 
-            {/* Карточка загрузки */}
+            {/* Карточка загрузки - DensVision */}
             <div className="bg-white rounded-2xl shadow-xl p-6">
               <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
                 <FaCloudUploadAlt className="mr-3 text-blue-600" />
-                {analysisType === "skin" ? "Тері Суретін Жүктеу" : "Өкпе Рентген Суретін Жүктеу"}
+                DensVision - {analysisType === "skin" ? "Тері Суретін Жүктеу" : "Өкпе Рентген Суретін Жүктеу"}
               </h2>
               
               {/* Область загрузки */}
@@ -447,30 +610,16 @@ const DermAIApp = () => {
                 >
                   {loading ? (
                     <>
-                      <svg
-                        className="animate-spin h-5 w-5 mr-3 text-white"
-                        viewBox="0 0 24 24"
-                      >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                        />
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        />
+                      <svg className="animate-spin h-5 w-5 mr-3 text-white" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
                       </svg>
-                      Талдауда...
+                      DensVision талдауда...
                     </>
                   ) : (
                     <>
                       <FaChartBar className="mr-3" />
-                      {analysisType === "skin" ? "Теріні Талдау" : "Өкпені Талдау"}
+                      DensVision {analysisType === "skin" ? "Теріні Талдау" : "Өкпені Талдау"}
                     </>
                   )}
                 </button>
@@ -517,12 +666,12 @@ const DermAIApp = () => {
               )}
             </div>
 
-            {/* Карточка результатов */}
+            {/* Карточка результатов - DensVision + DensAI */}
             {prediction && (
               <div className="bg-white rounded-2xl shadow-xl p-6 animate-fade-in">
                 <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
                   <FaChartBar className="mr-3 text-blue-600" />
-                  Талдау Нәтижесі
+                  DensVision + DensAI Нәтижесі
                 </h2>
                 
                 {/* Основной результат */}
@@ -543,7 +692,7 @@ const DermAIApp = () => {
                       <div className="text-4xl font-bold text-blue-600">
                         {prediction.confidence_percentage || `${(prediction.confidence * 100).toFixed(1)}%`}
                       </div>
-                      <div className="text-sm text-gray-500">сенімділік</div>
+                      <div className="text-sm text-gray-500">DensAI сенімділік</div>
                     </div>
                   </div>
                   
@@ -553,21 +702,42 @@ const DermAIApp = () => {
                     {getRiskText(prediction.risk_level)}
                   </div>
                   
-                  {/* Рекомендация */}
+                  {/* Рекомендация DensAI */}
                   <div className="mt-6 p-4 bg-white rounded-lg border border-gray-200">
                     <h4 className="font-bold text-gray-800 mb-2 flex items-center">
                       <FaInfoCircle className="mr-2 text-blue-500" />
-                      Ұсыныс:
+                      DensAI Ұсынысы:
                     </h4>
                     <p className="text-gray-700 leading-relaxed">{prediction.recommendation}</p>
                   </div>
+
+                  {/* КНОПКА СОХРАНЕНИЯ ДИАГНОЗА (DensAI) */}
+                  <div className="mt-6 pt-6 border-t border-gray-300">
+                    <button
+                      onClick={openSaveModal}
+                      disabled={!token}
+                      className={`w-full flex items-center justify-center px-6 py-4 rounded-xl font-bold text-white transition-all shadow-lg ${
+                        !token 
+                          ? "bg-gray-400 cursor-not-allowed" 
+                          : "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
+                      }`}
+                    >
+                      <FaSave className="mr-3 text-xl" />
+                      <span className="text-lg">DensAI - Науқасқа диагноз сақтау</span>
+                    </button>
+                    {!token && (
+                      <p className="text-center text-sm text-red-600 mt-2">
+                        Диагнозды сақтау үшін жүйеге кіріңіз
+                      </p>
+                    )}
+                  </div>
                 </div>
 
-                {/* Детальная информация о вероятностях */}
+                {/* Детальная информация о вероятностях от DensVision */}
                 <div>
                   <h4 className="font-bold text-gray-800 mb-4 flex items-center">
                     <FaChartBar className="mr-2" />
-                    Барлық Ықтималдықтар:
+                    DensVision - Барлық Ықтималдықтар:
                   </h4>
                   <div className="space-y-4">
                     {Object.entries(prediction.all_probabilities || {}).map(([className, data]) => (
@@ -576,7 +746,7 @@ const DermAIApp = () => {
                           <div className="flex items-center">
                             <span className="mr-2">{getClassName(className, prediction.analysis_type)}</span>
                             {prediction.prediction.toLowerCase() === className.toLowerCase() && (
-                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Таңдалған</span>
+                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">DensVision таңдаған</span>
                             )}
                           </div>
                         </div>
@@ -600,13 +770,13 @@ const DermAIApp = () => {
                   </div>
                 </div>
 
-                {/* Информация о модели */}
+                {/* Информация о модели DensVision */}
                 {prediction.model_info && (
                   <div className="mt-8 pt-6 border-t border-gray-200">
                     <div className="flex items-center text-sm text-gray-500">
                       <FaStethoscope className="mr-2" />
                       <div>
-                        Модель: <span className="font-medium">{prediction.model_info.name}</span>
+                        DensVision модель: <span className="font-medium">{prediction.model_info.name}</span>
                         {prediction.model_info.accuracy && (
                           <span className="ml-4">
                             Дәлдік: <span className="font-medium">{prediction.model_info.accuracy}</span>
@@ -620,20 +790,20 @@ const DermAIApp = () => {
             )}
           </div>
 
-          {/* Правая колонка - Информация и история */}
+          {/* Правая колонка - Информация и история (DensVision + DensAI) */}
           <div className="space-y-6">
             {/* Информация о моделях */}
             <div className="bg-white rounded-2xl shadow-xl p-6">
               <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
                 <FaStethoscope className="mr-3 text-blue-600" />
-                Модельдер Туралы Ақпарат
+                DensVision & DensAI Модельдері
               </h2>
               
               <div className="space-y-4">
-                {/* Информация о модели кожи */}
+                {/* Информация о модели кожи - DensVision */}
                 <div className="p-4 bg-blue-50 rounded-lg">
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-bold text-blue-800">Тері Диагностикасы</h3>
+                    <h3 className="font-bold text-blue-800">DensVision Тері</h3>
                     <span className={`px-2 py-1 text-xs rounded-full ${apiStatus.skin ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
                       {apiStatus.skin ? "Активті" : "Белсенді емес"}
                     </span>
@@ -652,30 +822,18 @@ const DermAIApp = () => {
                         <span className="text-gray-600">Дәлдік:</span>
                         <span className="font-medium">{modelsInfo.skin_cancer.accuracy || "N/A"}</span>
                       </div>
-                      {modelsInfo.skin_cancer.classes_list && (
-                        <div className="mt-2">
-                          <span className="text-gray-600">Сыныптар:</span>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {modelsInfo.skin_cancer.classes_list.map((cls, idx) => (
-                              <span key={idx} className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded">
-                                {cls}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
                     </div>
                   ) : (
                     <div className="text-sm text-gray-500 py-2 text-center">
-                      Модель ақпараты жүктелмеді
+                      DensVision ақпараты жүктелмеді
                     </div>
                   )}
                 </div>
 
-                {/* Информация о модели легких */}
+                {/* Информация о модели легких - DensAI */}
                 <div className="p-4 bg-teal-50 rounded-lg">
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-bold text-teal-800">Өкпе Диагностикасы</h3>
+                    <h3 className="font-bold text-teal-800">DensAI Өкпе</h3>
                     <span className={`px-2 py-1 text-xs rounded-full ${apiStatus.lungs ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
                       {apiStatus.lungs ? "Активті" : "Белсенді емес"}
                     </span>
@@ -694,39 +852,27 @@ const DermAIApp = () => {
                         <span className="text-gray-600">Дәлдік:</span>
                         <span className="font-medium">{modelsInfo.lung_disease.accuracy || "N/A"}</span>
                       </div>
-                      {modelsInfo.lung_disease.classes_list && (
-                        <div className="mt-2">
-                          <span className="text-gray-600">Сыныптар:</span>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {modelsInfo.lung_disease.classes_list.map((cls, idx) => (
-                              <span key={idx} className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded">
-                                {cls}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
                     </div>
                   ) : (
                     <div className="text-sm text-gray-500 py-2 text-center">
-                      Модель ақпараты жүктелмеді
+                      DensAI ақпараты жүктелмеді
                     </div>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* История анализов */}
+            {/* История анализов DensVision */}
             <div className="bg-white rounded-2xl shadow-xl p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold text-gray-800 flex items-center">
                   <FaHistory className="mr-3 text-blue-600" />
-                  Жуырдағы Талдаулар
+                  DensVision Тарихы
                 </h2>
                 {history.length > 0 && (
                   <button 
                     onClick={() => {
-                      localStorage.removeItem("medical_ai_history");
+                      localStorage.removeItem("densvision_history");
                       setHistory([]);
                     }}
                     className="text-sm text-red-600 hover:text-red-800"
@@ -759,7 +905,7 @@ const DermAIApp = () => {
                           item.result.risk_level === "medium" ? "bg-amber-500 text-white" : 
                           "bg-emerald-500 text-white"
                         }`}>
-                          {item.analysis_type === "skin" ? "Тері" : "Өкпе"}
+                          {item.analysis_type === "skin" ? "DensVision" : "DensAI"}
                         </div>
                       </div>
                       <div className="flex justify-between items-center">
@@ -776,7 +922,7 @@ const DermAIApp = () => {
               ) : (
                 <div className="text-center py-8 text-gray-400">
                   <FaHistory className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>Әлі талдаулар жоқ</p>
+                  <p>Әлі DensVision талдаулар жоқ</p>
                   <p className="text-sm mt-1">Сурет жүктеп, алғашқы талдауды бастаңыз</p>
                 </div>
               )}
@@ -786,7 +932,7 @@ const DermAIApp = () => {
             <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl border border-blue-200 p-6">
               <h3 className="font-bold text-blue-800 mb-3 flex items-center">
                 <FaInfoCircle className="mr-2" />
-                💡 Кеңестер және Ережелер:
+                💡 DensVision Кеңестер:
               </h3>
               <ul className="space-y-2 text-sm text-blue-700">
                 {analysisType === "skin" ? (
@@ -848,6 +994,164 @@ const DermAIApp = () => {
         </div>
       </div>
 
+      {/* Модальное окно сохранения диагноза (DensAI) */}
+      {showSaveModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-purple-600 to-indigo-600 text-white sticky top-0">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="p-2 bg-white/20 rounded-xl mr-3">
+                    <FaSave className="text-2xl" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">DensAI Диагнозын Сақтау</h2>
+                    <p className="text-purple-100 text-sm mt-1">Науқасқа DensAI талдауын қосу</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowSaveModal(false)}
+                  className="p-2 hover:bg-white/20 rounded-xl transition"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Предупреждение */}
+            <div className="p-6 bg-amber-50 border-b border-amber-200">
+              <div className="flex items-start">
+                <FaExclamationTriangle className="text-amber-500 text-2xl mr-3 flex-shrink-0 mt-1" />
+                <div className="text-sm text-amber-800">
+                  <p className="font-bold mb-2">⚠️ МАҢЫЗДЫ ЕСКЕРТУ (DensAI):</p>
+                  <ul className="space-y-1 list-disc list-inside">
+                    <li>Бұл DensAI жүйесімен автоматты жасалған диагноз</li>
+                    <li>DensAI 100% дәлдікпен жұмыс істемейді</li>
+                    <li>Диагнозда DensAI туралы ескерту болады</li>
+                    <li>Дәрігер міндетті түрде тексеруі керек</li>
+                    <li>Нақты емдеу үшін клиникалық тексеру қажет</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* Форма */}
+            <div className="p-6">
+              <div className="space-y-6">
+                {/* Выбор пациента */}
+                <div>
+                  <label className="block text-gray-800 font-bold mb-2 flex items-center">
+                    <FaUserInjured className="mr-2 text-purple-600" />
+                    Науқасты таңдаңыз *
+                  </label>
+                  <select
+                    value={selectedPatientId}
+                    onChange={(e) => setSelectedPatientId(e.target.value)}
+                    className="w-full p-4 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all"
+                  >
+                    <option value="">-- Науқасты таңдаңыз --</option>
+                    {patients.map((patient) => (
+                      <option key={patient.patientId} value={patient.patientId}>
+                        {patient.user?.firstName} {patient.user?.lastName} (ID: {patient.patientId})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Выбор медицинской записи */}
+                {selectedPatientId && (
+                  <div>
+                    <label className="block text-gray-800 font-bold mb-2">
+                      Медициналық жазба *
+                    </label>
+                    <select
+                      value={selectedRecordId}
+                      onChange={(e) => setSelectedRecordId(e.target.value)}
+                      className="w-full p-4 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all"
+                    >
+                      <option value="">-- Жазбаны таңдаңыз --</option>
+                      {medicalRecords.map((record) => (
+                        <option key={record.recordId} value={record.recordId}>
+                          Жазба #{record.recordId} - {new Date(record.createdAt).toLocaleDateString('kk-KZ')}
+                        </option>
+                      ))}
+                    </select>
+                    {medicalRecords.length === 0 && (
+                      <p className="text-sm text-yellow-600 mt-2">
+                        Бұл науқастың медициналық жазбасы жоқ. Алдымен жазба жасаңыз.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Информация о сохраняемом диагнозе */}
+                <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 border-2 border-blue-200">
+                  <h3 className="font-bold text-gray-800 mb-4 flex items-center">
+                    <FaInfoCircle className="mr-2 text-blue-600" />
+                    Сақталатын DensAI диагноз:
+                  </h3>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Талдау түрі:</span>
+                      <span className="font-medium">{analysisType === "skin" ? "🩺 DensVision Тері" : "🫁 DensAI Өкпе"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Диагноз:</span>
+                      <span className="font-medium">{getClassName(prediction.prediction, prediction.analysis_type)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">DensAI сенімділік:</span>
+                      <span className="font-medium">{prediction.confidence_percentage || `${(prediction.confidence * 100).toFixed(1)}%`}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Қауіп деңгейі:</span>
+                      <span className="font-medium">{getRiskIcon(prediction.risk_level)} {getRiskText(prediction.risk_level)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Кнопки */}
+              <div className="flex gap-4 mt-8">
+                <button
+                  onClick={saveDiagnosis}
+                  disabled={savingDiagnosis || !selectedPatientId || !selectedRecordId}
+                  className={`flex-1 flex items-center justify-center px-6 py-4 rounded-xl font-bold text-white transition-all shadow-lg ${
+                    savingDiagnosis || !selectedPatientId || !selectedRecordId
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
+                  }`}
+                >
+                  {savingDiagnosis ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                      </svg>
+                      DensAI сақталуда...
+                    </>
+                  ) : (
+                    <>
+                      <FaSave className="mr-3" />
+                      DensAI диагнозын сақтау
+                    </>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => setShowSaveModal(false)}
+                  className="flex-1 bg-gray-200 text-gray-700 px-6 py-4 rounded-xl font-bold hover:bg-gray-300 transition-all"
+                >
+                  Бас тарту
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Footer */}
       <footer className="bg-gradient-to-r from-blue-800 to-teal-800 text-white p-6 mt-8">
         <div className="container mx-auto">
@@ -855,14 +1159,14 @@ const DermAIApp = () => {
             <div className="mb-4 md:mb-0">
               <div className="flex items-center">
                 <FaStethoscope className="w-6 h-6 mr-3 text-cyan-300" />
-                <h3 className="text-xl font-bold">MedAI - Медициналық Диагностика</h3>
+                <h3 className="text-xl font-bold">DensVision + DensAI</h3>
               </div>
               <p className="text-sm opacity-80 mt-2">
                 Жасанды интеллект негізіндегі медициналық көмекші скрининг жүйесі
               </p>
             </div>
             <div className="text-sm text-center md:text-right">
-              <p>© {new Date().getFullYear()} MedAI - Барлық құқықтар қорғалған</p>
+              <p>© {new Date().getFullYear()} DensAI - Барлық құқықтар қорғалған</p>
               <p className="opacity-80 mt-1">Version 2.0.0</p>
               <p className="text-xs opacity-60 mt-2">
                 Бұл қосымша тек көмекші мақсатта жасалған. 
@@ -884,7 +1188,6 @@ const DermAIApp = () => {
           to { opacity: 1; transform: translateY(0); }
         }
         
-        /* Стили для скроллбара */
         ::-webkit-scrollbar {
           width: 6px;
         }
@@ -907,4 +1210,4 @@ const DermAIApp = () => {
   );
 };
 
-export default DermAIApp;
+export default DensVision;

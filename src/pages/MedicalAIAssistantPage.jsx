@@ -6,7 +6,7 @@ import { GiBrain, GiMedicines, GiHealthNormal, GiHealing } from "react-icons/gi"
 import { MdHealthAndSafety, MdLocalHospital } from "react-icons/md";
 import aiDatabase from '../components/aiMedicalDatabase.json';
 
-const MedicalAIAssistantPage = () => {
+const DensAIChat = () => {
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -177,10 +177,10 @@ const MedicalAIAssistantPage = () => {
         setAnalysisResult(symptomMatch);
         setFollowUpQuestions(symptomMatch.followUpQuestions || []);
         
-        // Формируем красивый ответ AI
+        // Формируем красивый ответ DensAI
         const urgencyEmoji = ["🟢", "🟡", "🟠", "🔴", "🚨"][symptomMatch.urgencyLevel - 1];
         
-        let aiResponse = `🔍 **Талдау аяқталды**\n\n`;
+        let aiResponse = `🔍 **DensAI талдауы аяқталды**\n\n`;
         aiResponse += `${urgencyEmoji} **Жеделдік дәрежесі:** ${symptomMatch.urgencyDescription}\n\n`;
         
         if (symptomMatch.redFlags && symptomMatch.redFlags.length > 0) {
@@ -189,7 +189,7 @@ const MedicalAIAssistantPage = () => {
         
         aiResponse += `🏥 **Мүмкін мән-жайлар:**\n${symptomMatch.possibleConditions.map(c => `• ${c}`).join('\n')}\n\n`;
         aiResponse += `👨‍⚕️ **Ұсынылатын мамандар:**\n${symptomMatch.recommendedSpecialists.map(s => `• ${s}`).join('\n')}\n\n`;
-        aiResponse += `💡 **Ұсыныстар:**\n${symptomMatch.recommendations.map(r => `• ${r}`).join('\n')}`;
+        aiResponse += `💡 **DensAI ұсыныстары:**\n${symptomMatch.recommendations.map(r => `• ${r}`).join('\n')}`;
         
         const aiMessage = {
           id: messages.length + 2,
@@ -210,7 +210,7 @@ const MedicalAIAssistantPage = () => {
         // Если не нашли точного совпадения
         const aiMessage = {
           id: messages.length + 2,
-          text: "Кешіріңіз, мен сіздің симптомдарыңызды дәл түсіне алмадым. Өтінеміз, көбірек мәлімет беріңіз:\n\n• Қай жерде ауырып тұр?\n• Қашан басталды?\n• Қандай қосымша белгілер бар?\n• Температураңыз бар ма?\n\nНемесе жедел үлгілерді пайдаланып көріңіз.",
+          text: "Кешіріңіз, DensAI сіздің симптомдарыңызды дәл түсіне алмады. Өтінеміз, көбірек мәлімет беріңіз:\n\n• Қай жерде ауырып тұр?\n• Қашан басталды?\n• Қандай қосымша белгілер бар?\n• Температураңыз бар ма?\n\nНемесе жедел үлгілерді пайдаланып көріңіз.",
           sender: "ai",
           timestamp: new Date(),
         };
@@ -219,7 +219,7 @@ const MedicalAIAssistantPage = () => {
       }
       
     } catch (error) {
-      console.error("Талдау қатесі:", error);
+      console.error("DensAI талдау қатесі:", error);
       
       const errorMessage = {
         id: messages.length + 2,
@@ -279,7 +279,7 @@ const MedicalAIAssistantPage = () => {
   };
   
   const clearChat = () => {
-    const confirmClear = window.confirm("Сөйлесу тарихын тазалау керек пе?");
+    const confirmClear = window.confirm("DensAI сөйлесу тарихын тазалау керек пе?");
     if (confirmClear) {
       setMessages([
         {
@@ -343,7 +343,7 @@ const MedicalAIAssistantPage = () => {
             <div>
               <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-2 flex items-center">
                 <FaRobot className="mr-3 text-emerald-600" />
-                Densaulyq AI Көмекшісі
+                DensAI Chat
               </h1>
               <p className="text-gray-600 max-w-3xl">
                 Жасанды интеллект арқылы симптомдарды талдау. Денсаулығыңызға күтім жасаймыз.
@@ -439,7 +439,7 @@ const MedicalAIAssistantPage = () => {
                 </svg>
                 Жедел үлгілер
               </h3>
-              <p className="text-sm text-gray-600 mb-4">Симптомдарды жедел сипаттау үшін басыңыз</p>
+              <p className="text-sm text-gray-600 mb-4">DensAI - симптомдарды жедел сипаттау үшін басыңыз</p>
               <div className="space-y-3">
                 {symptomTemplates.map((template, index) => (
                   <button
@@ -462,7 +462,7 @@ const MedicalAIAssistantPage = () => {
             </motion.div>
           </div>
 
-          {/* Негізгі чат */}
+          {/* Негізгі чат - DensAI */}
           <div className="lg:col-span-3">
             <div className="bg-white rounded-2xl shadow-xl overflow-hidden h-[calc(100vh-200px)] flex flex-col border border-gray-200">
               {/* Чаттың тақырыбы */}
@@ -476,7 +476,7 @@ const MedicalAIAssistantPage = () => {
                       </div>
                     </div>
                     <div>
-                      <h2 className="text-2xl font-bold text-white">Densaulyq AI</h2>
+                      <h2 className="text-2xl font-bold text-white">DensAI Chat</h2>
                       <p className="text-emerald-100 text-sm">Симптомдарды нақты уақыт режимінде талдайды</p>
                     </div>
                   </div>
@@ -553,7 +553,7 @@ const MedicalAIAssistantPage = () => {
                               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
                               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                             </div>
-                            <span className="text-gray-600 font-medium">Симптомдарды талдауда...</span>
+                            <span className="text-gray-600 font-medium">DensAI симптомдарды талдауда...</span>
                           </div>
                         </div>
                       </div>
@@ -575,7 +575,7 @@ const MedicalAIAssistantPage = () => {
                     <svg className="w-4 h-4 mr-2 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    Өтінеміз, нақтылаңыз:
+                    DensAI өтінеміз, нақтылаңыз:
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {followUpQuestions.map((question) => (
@@ -654,7 +654,7 @@ const MedicalAIAssistantPage = () => {
           </div>
         </div>
 
-        {/* Талдау нәтижелері */}
+        {/* Талдау нәтижелері - DensAI */}
         {analysisResult && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -666,7 +666,7 @@ const MedicalAIAssistantPage = () => {
                 <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                Симптомдарды талдау нәтижелері
+                DensAI - Симптомдарды талдау нәтижелері
               </h3>
             </div>
             
@@ -719,7 +719,7 @@ const MedicalAIAssistantPage = () => {
               <div className="border border-gray-200 rounded-xl p-5">
                 <h4 className="font-semibold text-gray-700 mb-4 flex items-center">
                   <GiHealthNormal className="mr-2 text-emerald-600" />
-                  Ұсыныстар
+                  DensAI Ұсыныстары
                 </h4>
                 <ul className="space-y-3">
                   {analysisResult.recommendations.slice(0, 3).map((rec, index) => (
@@ -768,4 +768,4 @@ const MedicalAIAssistantPage = () => {
   );
 };
 
-export default MedicalAIAssistantPage;
+export default DensAIChat;
