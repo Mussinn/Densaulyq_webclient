@@ -20,6 +20,12 @@ import {
   FaNotesMedical,
   FaPills,
   FaClipboardList,
+  FaFlask,
+  FaFilePdf,
+  FaFileImage,
+  FaEye,
+  FaXRay,
+  FaMicroscope
 } from 'react-icons/fa';
 import api from '../../utils/api';
 
@@ -28,10 +34,18 @@ const PatientMedicalHistory = () => {
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [prescriptions, setPrescriptions] = useState([]);
   const [appointments, setAppointments] = useState([]);
+  const [labResults, setLabResults] = useState([]);
+  const [activeTab, setActiveTab] = useState('medicalHistory');
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
   const { token } = useSelector((state) => state.token);
+
+  const tabs = [
+    { id: 'medicalHistory', label: 'Медициналық тарих', icon: <FaClipboardList /> },
+    { id: 'labResults', label: 'Талдау нәтижелері', icon: <FaFlask /> },
+    { id: 'appointments', label: 'Кездесулер', icon: <FaHistory /> },
+  ];
 
   // Загрузка списка пациентов
   const fetchPatients = async () => {
@@ -68,6 +82,13 @@ const PatientMedicalHistory = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       setAppointments(appointmentsRes.data || []);
+      
+      // Загружаем лабораторные тесты
+      const testsRes = await api.get(`/api/v1/test/patient/${patientId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      console.log('Талдау нәтижелері:', testsRes.data);
+      setLabResults(testsRes.data || []);
 
     } catch (err) {
       console.error('Тарихты жүктеу қатесі:', err);
@@ -79,6 +100,7 @@ const PatientMedicalHistory = () => {
   // Выбор пациента
   const handlePatientSelect = async (patient) => {
     setSelectedPatient(patient);
+    setActiveTab('medicalHistory');
     await fetchPatientFullHistory(patient.patientId);
   };
 
@@ -184,13 +206,15 @@ const PatientMedicalHistory = () => {
     const completedAppointments = appointments.filter(a => 
       a.status === 'completed' || a.status === 'COMPLETED'
     ).length;
+    const totalTests = labResults.length;
 
     return {
       totalRecords,
       totalDiagnoses,
       totalPrescriptions,
       totalAppointments,
-      completedAppointments
+      completedAppointments,
+      totalTests
     };
   };
 
@@ -199,6 +223,65 @@ const PatientMedicalHistory = () => {
     return diagnosisText?.includes('AI') || 
            diagnosisText?.includes('ЖАСАНДЫ ИНТЕЛЛЕКТ') ||
            diagnosisText?.includes('🤖');
+  };
+
+  // Получение иконки для типа теста
+  const getTestIcon = (testName) => {
+    const name = testName?.toLowerCase() || '';
+    if (name.includes('рентген') || name.includes('снимок') || name.includes('x-ray')) {
+      return <FaXRay className="text-blue-500" />;
+    } else if (name.includes('кровь') || name.includes('анализ') || name.includes('лаборатор')) {
+      return <FaMicroscope className="text-red-500" />;
+    } else {
+      return <FaFileMedical className="text-purple-500" />;
+    }
+  };
+
+  // Скачивание файла
+  const handleDownloadFile = async (url, filename) => {
+    if (!url) {
+      alert('URL файла не найден');
+      return;
+    }
+    
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Ошибка при скачивании файла');
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.setAttribute('download', filename || 'file');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+      
+    } catch (err) {
+      console.error('Ошибка скачивания файла:', err);
+      window.open(url, '_blank');
+    }
+  };
+
+  // Просмотр изображения
+  const handleViewImage = (url) => {
+    if (!url) return;
+    window.open(url.replace('/files/', '/files/view/'), '_blank');
+  };
+
+  // Получение имени файла из URL
+  const getFileNameFromUrl = (url) => {
+    if (!url) return 'Файл';
+    const parts = url.split('/');
+    return parts[parts.length - 1] || 'Файл';
   };
 
   // Экспорт в PDF
@@ -220,6 +303,391 @@ const PatientMedicalHistory = () => {
   const filteredPatients = getFilteredPatients();
   const stats = getPatientStats();
   const groupedData = getGroupedData();
+
+  // Рендер лабораторных тестов
+  const renderLabResults = () => {
+    if (labResults.length === 0) {
+      return (
+        <div className="text-center py-12">
+          <FaFlask className="text-5xl text-gray-300 mx-auto mb-4" />
+          <p className="text-gray-600 text-lg font-medium">Талдау нәтижелері жоқ</p>
+          <p className="text-gray-500 text-sm mt-2">Науқастың әлі талдау нәтижелері жоқ</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        {labResults.map((test) => (
+          <div 
+            key={test.testId}
+            className="bg-white border-2 border-blue-200 rounded-xl overflow-hidden hover:shadow-lg transition"
+          >
+            {/* Заголовок теста */}
+            <div className="p-5 bg-gradient-to-r from-blue-50 to-cyan-50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="p-3 bg-blue-600 rounded-xl mr-4">
+                    {getTestIcon(test.testName)}
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-gray-800 text-lg">
+                      🔬 {test.testName}
+                    </h4>
+                    <p className="text-sm text-gray-600">
+                      📅 {formatDateTime(test.testDate)}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="bg-blue-600 text-white px-4 py-2 rounded-full text-sm font-bold">
+                    ID: {test.testId}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Результаты */}
+            <div className="p-5">
+              {test.result && (
+                <div className="bg-gray-50 p-4 rounded-xl border-2 border-gray-200 mb-4">
+                  <h6 className="font-bold text-gray-800 mb-3 flex items-center">
+                    <FaNotesMedical className="mr-2 text-blue-600" />
+                    📊 Нәтиже:
+                  </h6>
+                  <div className="text-gray-700 whitespace-pre-wrap text-sm leading-relaxed">
+                    {test.result}
+                  </div>
+                </div>
+              )}
+
+              {/* Файлы и изображения */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {test.imageUrl && (
+                  <div className="bg-purple-50 p-4 rounded-xl border-2 border-purple-200">
+                    <div className="flex items-center mb-3">
+                      <FaFileImage className="text-purple-600 mr-2" />
+                      <h6 className="font-bold text-gray-800">Сурет</h6>
+                    </div>
+                    <img 
+                      src={test.imageUrl} 
+                      alt={test.testName}
+                      className="w-full h-48 object-cover rounded-lg border-2 border-purple-300 cursor-pointer hover:border-purple-500 transition"
+                      onClick={() => handleViewImage(test.imageUrl)}
+                    />
+                    <div className="flex gap-2 mt-3">
+                      <button
+                        onClick={() => handleViewImage(test.imageUrl)}
+                        className="flex-1 px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition flex items-center justify-center text-sm"
+                      >
+                        <FaEye className="mr-1" /> Қарау
+                      </button>
+                      <button
+                        onClick={() => handleDownloadFile(test.imageUrl, getFileNameFromUrl(test.imageUrl))}
+                        className="flex-1 px-3 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition flex items-center justify-center text-sm"
+                      >
+                        <FaDownload className="mr-1" /> Жүктеу
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {test.fileUrl && (
+                  <div className="bg-green-50 p-4 rounded-xl border-2 border-green-200">
+                    <div className="flex items-center mb-3">
+                      <FaFilePdf className="text-green-600 mr-2" />
+                      <h6 className="font-bold text-gray-800">Құжат</h6>
+                    </div>
+                    <div className="flex items-center justify-center h-48 bg-white rounded-lg border-2 border-green-300">
+                      <div className="text-center">
+                        <FaFilePdf className="text-5xl text-green-600 mx-auto mb-3" />
+                        <p className="text-sm text-gray-600">PDF құжат</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleDownloadFile(test.fileUrl, getFileNameFromUrl(test.fileUrl))}
+                      className="w-full mt-3 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center justify-center text-sm"
+                    >
+                      <FaDownload className="mr-1" /> Жүктеу
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Дата создания */}
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <p className="text-sm text-gray-500">
+                  Жасалған: {formatDateTime(test.createdAt)}
+                </p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // Рендер медицинской истории
+  const renderMedicalHistory = () => {
+    if (groupedData.length === 0) {
+      return (
+        <div className="text-center py-12">
+          <FaFileMedical className="text-5xl text-gray-300 mx-auto mb-4" />
+          <p className="text-gray-600 text-lg font-medium">Медициналық тарих жоқ</p>
+          <p className="text-gray-500 text-sm mt-2">Науқастың әлі жазбасы, диагнозы немесе рецепті жоқ</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+        {groupedData.map((record) => (
+          <div 
+            key={record.recordId}
+            className="border-2 border-purple-200 rounded-2xl overflow-hidden"
+          >
+            {/* Заголовок медицинской записи */}
+            <div className="p-5 bg-gradient-to-r from-purple-100 to-pink-100">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="p-3 bg-purple-600 rounded-xl mr-4">
+                    <FaClipboardList className="text-white text-xl" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-gray-800 text-xl">
+                      📋 Медициналық Жазба #{record.recordId}
+                    </h4>
+                    <p className="text-sm text-gray-600">
+                      Жасалған: {formatDate(record.medicalRecord.createdAt)}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <span className="bg-purple-600 text-white px-4 py-2 rounded-full text-sm font-bold">
+                    {record.diagnoses.length} диагноз
+                  </span>
+                  <span className="bg-green-600 text-white px-4 py-2 rounded-full text-sm font-bold">
+                    {record.diagnoses.reduce((acc, d) => acc + d.prescriptions.length, 0)} рецепт
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Диагнозы */}
+            <div className="p-6 space-y-4">
+              {record.diagnoses.map((diagnosisData) => (
+                <div
+                  key={diagnosisData.diagnosisId}
+                  className={`border-2 rounded-xl overflow-hidden ${
+                    isAIDiagnosis(diagnosisData.diagnosis.diagnosis)
+                      ? 'border-purple-300 bg-gradient-to-r from-purple-50 to-pink-50'
+                      : 'border-indigo-200 bg-gradient-to-r from-indigo-50 to-blue-50'
+                  }`}
+                >
+                  {/* Заголовок диагноза */}
+                  <div className="p-5 bg-white/60">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center">
+                        <div className={`p-3 rounded-xl mr-3 ${
+                          isAIDiagnosis(diagnosisData.diagnosis.diagnosis)
+                            ? 'bg-gradient-to-r from-purple-500 to-pink-500'
+                            : 'bg-indigo-600'
+                        }`}>
+                          {isAIDiagnosis(diagnosisData.diagnosis.diagnosis) ? (
+                            <span className="text-white text-2xl">🤖</span>
+                          ) : (
+                            <FaStethoscope className="text-white text-xl" />
+                          )}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h5 className="font-bold text-gray-800 text-lg">
+                              🩺 Диагноз #{diagnosisData.diagnosisId}
+                            </h5>
+                            {isAIDiagnosis(diagnosisData.diagnosis.diagnosis) && (
+                              <span className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs px-3 py-1 rounded-full font-bold">
+                                🤖 AI Диагноз
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-600 mt-1">
+                            📅 {formatDate(diagnosisData.diagnosis.diagnosisDate)}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-bold">
+                        {diagnosisData.prescriptions.length} рецепт
+                      </span>
+                    </div>
+
+                    {/* Текст диагноза */}
+                    <div className={`p-4 rounded-xl ${
+                      isAIDiagnosis(diagnosisData.diagnosis.diagnosis)
+                        ? 'bg-white border-2 border-purple-200'
+                        : 'bg-white border-2 border-indigo-200'
+                    }`}>
+                      <h6 className="font-bold text-gray-800 mb-3 flex items-center text-sm">
+                        <FaNotesMedical className="mr-2 text-indigo-600" />
+                        Диагноз мәтіні:
+                      </h6>
+                      <div className="text-gray-700 whitespace-pre-wrap text-sm leading-relaxed">
+                        {diagnosisData.diagnosis.diagnosis}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Рецепты */}
+                  {diagnosisData.prescriptions.length > 0 && (
+                    <div className="p-5 bg-green-50 border-t-2 border-green-200">
+                      <h6 className="font-bold text-gray-800 mb-4 flex items-center">
+                        <FaPrescriptionBottle className="mr-2 text-green-600 text-xl" />
+                        💊 Рецепттер ({diagnosisData.prescriptions.length}):
+                      </h6>
+                      <div className="space-y-3">
+                        {diagnosisData.prescriptions.map((prescription) => (
+                          <div 
+                            key={prescription.prescriptionId}
+                            className="bg-white p-4 rounded-xl border-2 border-green-300 hover:shadow-lg transition-all"
+                          >
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center">
+                                <div className="p-2 bg-green-500 rounded-lg mr-3">
+                                  <FaPills className="text-white text-lg" />
+                                </div>
+                                <div>
+                                  <p className="font-bold text-gray-800 text-lg">
+                                    💊 Рецепт #{prescription.prescriptionId}
+                                  </p>
+                                  <p className="text-sm text-gray-600">
+                                    📅 {formatDate(prescription.prescriptionDate)}
+                                  </p>
+                                </div>
+                              </div>
+                              {prescription.appointment && (
+                                <span className="bg-blue-100 text-blue-800 text-xs px-3 py-1.5 rounded-full font-medium">
+                                  Кездесу #{prescription.appointment.appointmentId}
+                                </span>
+                              )}
+                            </div>
+                            
+                            {/* Текст рецепта */}
+                            {prescription.callback && (
+                              <div className="bg-green-50 p-4 rounded-lg border-2 border-green-200">
+                                <h6 className="font-bold text-gray-700 text-sm mb-2">📋 Рецепт:</h6>
+                                <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                                  {prescription.callback}
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Информация о враче и кездесу */}
+                            {prescription.appointment && (
+                              <div className="mt-3 pt-3 border-t border-green-200">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                  {prescription.appointment.doctor && (
+                                    <div className="flex items-center text-gray-700">
+                                      <FaUserMd className="mr-2 text-blue-600" />
+                                      <div>
+                                        <p className="font-medium">
+                                          👨‍⚕️ {prescription.appointment.doctor.user?.firstName} {prescription.appointment.doctor.user?.lastName}
+                                        </p>
+                                        {prescription.appointment.doctor.specialty && (
+                                          <p className="text-xs text-gray-500">
+                                            {prescription.appointment.doctor.specialty}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+                                  <div className="flex items-center text-gray-700">
+                                    <FaClock className="mr-2 text-teal-600" />
+                                    <div>
+                                      <p className="font-medium text-xs">Кездесу уақыты:</p>
+                                      <p className="text-xs text-gray-600">
+                                        {formatDateTime(prescription.appointment.appointmentDate)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // Рендер истории приемов
+  const renderAppointments = () => {
+    if (appointments.length === 0) {
+      return (
+        <div className="text-center py-12">
+          <FaCalendar className="text-5xl text-gray-300 mx-auto mb-4" />
+          <p className="text-gray-600 text-lg font-medium">Кездесулер жоқ</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        {appointments.map((appointment) => (
+          <div 
+            key={appointment.appointmentId}
+            className="p-4 bg-gradient-to-r from-teal-50 to-cyan-50 rounded-xl border-2 border-teal-200 hover:shadow-md transition-all"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center">
+                <div className="p-2 bg-teal-600 rounded-lg mr-3">
+                  <FaCalendar className="text-white" />
+                </div>
+                <div>
+                  <p className="font-bold text-gray-800">
+                    Кездесу #{appointment.appointmentId}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {formatDateTime(appointment.appointmentDate)}
+                  </p>
+                </div>
+              </div>
+              <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                appointment.status === 'COMPLETED' || appointment.status === 'completed'
+                  ? 'bg-green-100 text-green-800'
+                  : appointment.status === 'CONFIRMED' || appointment.status === 'confirmed'
+                  ? 'bg-blue-100 text-blue-800'
+                  : appointment.status === 'CANCELLED' || appointment.status === 'cancelled'
+                  ? 'bg-red-100 text-red-800'
+                  : 'bg-yellow-100 text-yellow-800'
+              }`}>
+                {appointment.status}
+              </span>
+            </div>
+
+            {appointment.doctor && (
+              <div className="flex items-center text-sm text-gray-700 bg-white p-3 rounded-lg">
+                <FaUserMd className="mr-2 text-teal-600" />
+                <span className="font-medium">
+                  Дәрігер: {appointment.doctor.user?.firstName} {appointment.doctor.user?.lastName}
+                </span>
+                {appointment.doctor.specialty && (
+                  <span className="ml-2 text-gray-500">
+                    • {appointment.doctor.specialty}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
@@ -439,7 +907,7 @@ const PatientMedicalHistory = () => {
                         <FaChartLine className="mr-2 text-indigo-600" />
                         Медициналық Статистика
                       </h3>
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
                         <div className="text-center p-4 bg-white rounded-xl border-2 border-blue-100 shadow-sm">
                           <div className="text-3xl font-bold text-blue-600">{stats.totalRecords}</div>
                           <div className="text-xs text-gray-600 mt-1">Мед. жазба</div>
@@ -453,307 +921,61 @@ const PatientMedicalHistory = () => {
                           <div className="text-xs text-gray-600 mt-1">Рецепт</div>
                         </div>
                         <div className="text-center p-4 bg-white rounded-xl border-2 border-orange-100 shadow-sm">
-                          <div className="text-3xl font-bold text-orange-600">{stats.totalAppointments}</div>
-                          <div className="text-xs text-gray-600 mt-1">Кездесу</div>
+                          <div className="text-3xl font-bold text-orange-600">{stats.totalTests}</div>
+                          <div className="text-xs text-gray-600 mt-1">Талдау</div>
                         </div>
                         <div className="text-center p-4 bg-white rounded-xl border-2 border-teal-100 shadow-sm">
-                          <div className="text-3xl font-bold text-teal-600">{stats.completedAppointments}</div>
+                          <div className="text-3xl font-bold text-teal-600">{stats.totalAppointments}</div>
+                          <div className="text-xs text-gray-600 mt-1">Кездесу</div>
+                        </div>
+                        <div className="text-center p-4 bg-white rounded-xl border-2 border-emerald-100 shadow-sm">
+                          <div className="text-3xl font-bold text-emerald-600">{stats.completedAppointments}</div>
                           <div className="text-xs text-gray-600 mt-1">Аяқталған</div>
                         </div>
                       </div>
                     </div>
                   )}
+
+                  {/* Вкладки */}
+                  <div className="border-b border-gray-200 bg-gray-50">
+                    <div className="flex">
+                      {tabs.map((tab) => (
+                        <button
+                          key={tab.id}
+                          onClick={() => setActiveTab(tab.id)}
+                          className={`flex items-center px-6 py-3 font-medium transition-all ${
+                            activeTab === tab.id
+                              ? 'bg-white text-indigo-600 border-b-2 border-indigo-600'
+                              : 'text-gray-600 hover:text-indigo-600 hover:bg-gray-100'
+                          }`}
+                        >
+                          <span className="mr-2">{tab.icon}</span>
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </motion.div>
 
-                {/* Медицинские записи с диагнозами и рецептами */}
+                {/* Контент вкладок */}
                 <motion.div 
                   className="bg-white rounded-2xl shadow-xl border border-gray-200"
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 }}
                 >
-                  <div className="p-6 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-t-2xl">
-                    <h3 className="text-2xl font-bold flex items-center">
-                      <FaFileMedical className="mr-3" />
-                      Толық Медициналық Тарих
-                    </h3>
-                    <p className="text-purple-100 text-sm mt-1">
-                      Жазбалар → Диагноздар → Рецепттер
-                    </p>
-                  </div>
-
                   <div className="p-6">
                     {loading ? (
                       <div className="text-center py-12">
                         <div className="animate-spin w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full mx-auto mb-4"></div>
                         <p className="text-gray-600">Жүктелуде...</p>
                       </div>
-                    ) : groupedData.length === 0 ? (
-                      <div className="text-center py-12">
-                        <FaFileMedical className="text-5xl text-gray-300 mx-auto mb-4" />
-                        <p className="text-gray-600 text-lg font-medium">Медициналық тарих жоқ</p>
-                        <p className="text-gray-500 text-sm mt-2">Науқастың әлі жазбасы, диагнозы немесе рецепті жоқ</p>
-                      </div>
                     ) : (
-                      <div className="space-y-6">
-                        {groupedData.map((record) => (
-                          <div 
-                            key={record.recordId}
-                            className="border-2 border-purple-200 rounded-2xl overflow-hidden"
-                          >
-                            {/* Заголовок медицинской записи */}
-                            <div className="p-5 bg-gradient-to-r from-purple-100 to-pink-100">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center">
-                                  <div className="p-3 bg-purple-600 rounded-xl mr-4">
-                                    <FaClipboardList className="text-white text-xl" />
-                                  </div>
-                                  <div>
-                                    <h4 className="font-bold text-gray-800 text-xl">
-                                      📋 Медициналық Жазба #{record.recordId}
-                                    </h4>
-                                    <p className="text-sm text-gray-600">
-                                      Жасалған: {formatDate(record.medicalRecord.createdAt)}
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="flex gap-2">
-                                  <span className="bg-purple-600 text-white px-4 py-2 rounded-full text-sm font-bold">
-                                    {record.diagnoses.length} диагноз
-                                  </span>
-                                  <span className="bg-green-600 text-white px-4 py-2 rounded-full text-sm font-bold">
-                                    {record.diagnoses.reduce((acc, d) => acc + d.prescriptions.length, 0)} рецепт
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Диагнозы */}
-                            <div className="p-6 space-y-4">
-                              {record.diagnoses.map((diagnosisData) => (
-                                <div
-                                  key={diagnosisData.diagnosisId}
-                                  className={`border-2 rounded-xl overflow-hidden ${
-                                    isAIDiagnosis(diagnosisData.diagnosis.diagnosis)
-                                      ? 'border-purple-300 bg-gradient-to-r from-purple-50 to-pink-50'
-                                      : 'border-indigo-200 bg-gradient-to-r from-indigo-50 to-blue-50'
-                                  }`}
-                                >
-                                  {/* Заголовок диагноза */}
-                                  <div className="p-5 bg-white/60">
-                                    <div className="flex items-center justify-between mb-4">
-                                      <div className="flex items-center">
-                                        <div className={`p-3 rounded-xl mr-3 ${
-                                          isAIDiagnosis(diagnosisData.diagnosis.diagnosis)
-                                            ? 'bg-gradient-to-r from-purple-500 to-pink-500'
-                                            : 'bg-indigo-600'
-                                        }`}>
-                                          {isAIDiagnosis(diagnosisData.diagnosis.diagnosis) ? (
-                                            <span className="text-white text-2xl">🤖</span>
-                                          ) : (
-                                            <FaStethoscope className="text-white text-xl" />
-                                          )}
-                                        </div>
-                                        <div>
-                                          <div className="flex items-center gap-2">
-                                            <h5 className="font-bold text-gray-800 text-lg">
-                                              🩺 Диагноз #{diagnosisData.diagnosisId}
-                                            </h5>
-                                            {isAIDiagnosis(diagnosisData.diagnosis.diagnosis) && (
-                                              <span className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs px-3 py-1 rounded-full font-bold">
-                                                🤖 AI Диагноз
-                                              </span>
-                                            )}
-                                          </div>
-                                          <p className="text-sm text-gray-600 mt-1">
-                                            📅 {formatDate(diagnosisData.diagnosis.diagnosisDate)}
-                                          </p>
-                                        </div>
-                                      </div>
-                                      <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-bold">
-                                        {diagnosisData.prescriptions.length} рецепт
-                                      </span>
-                                    </div>
-
-                                    {/* Текст диагноза */}
-                                    <div className={`p-4 rounded-xl ${
-                                      isAIDiagnosis(diagnosisData.diagnosis.diagnosis)
-                                        ? 'bg-white border-2 border-purple-200'
-                                        : 'bg-white border-2 border-indigo-200'
-                                    }`}>
-                                      <h6 className="font-bold text-gray-800 mb-3 flex items-center text-sm">
-                                        <FaNotesMedical className="mr-2 text-indigo-600" />
-                                        Диагноз мәтіні:
-                                      </h6>
-                                      <div className="text-gray-700 whitespace-pre-wrap text-sm leading-relaxed">
-                                        {diagnosisData.diagnosis.diagnosis}
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {/* Рецепты */}
-                                  {diagnosisData.prescriptions.length > 0 && (
-                                    <div className="p-5 bg-green-50 border-t-2 border-green-200">
-                                      <h6 className="font-bold text-gray-800 mb-4 flex items-center">
-                                        <FaPrescriptionBottle className="mr-2 text-green-600 text-xl" />
-                                        💊 Рецепттер ({diagnosisData.prescriptions.length}):
-                                      </h6>
-                                      <div className="space-y-3">
-                                        {diagnosisData.prescriptions.map((prescription) => (
-                                          <div 
-                                            key={prescription.prescriptionId}
-                                            className="bg-white p-4 rounded-xl border-2 border-green-300 hover:shadow-lg transition-all"
-                                          >
-                                            <div className="flex items-center justify-between mb-3">
-                                              <div className="flex items-center">
-                                                <div className="p-2 bg-green-500 rounded-lg mr-3">
-                                                  <FaPills className="text-white text-lg" />
-                                                </div>
-                                                <div>
-                                                  <p className="font-bold text-gray-800 text-lg">
-                                                    💊 Рецепт #{prescription.prescriptionId}
-                                                  </p>
-                                                  <p className="text-sm text-gray-600">
-                                                    📅 {formatDate(prescription.prescriptionDate)}
-                                                  </p>
-                                                </div>
-                                              </div>
-                                              {prescription.appointment && (
-                                                <span className="bg-blue-100 text-blue-800 text-xs px-3 py-1.5 rounded-full font-medium">
-                                                  Кездесу #{prescription.appointment.appointmentId}
-                                                </span>
-                                              )}
-                                            </div>
-                                            
-                                            {/* Текст рецепта */}
-                                            {prescription.callback && (
-                                              <div className="bg-green-50 p-4 rounded-lg border-2 border-green-200">
-                                                <h6 className="font-bold text-gray-700 text-sm mb-2">📋 Рецепт:</h6>
-                                                <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-                                                  {prescription.callback}
-                                                </p>
-                                              </div>
-                                            )}
-
-                                            {/* Информация о враче и кездесу */}
-                                            {prescription.appointment && (
-                                              <div className="mt-3 pt-3 border-t border-green-200">
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                                                  {prescription.appointment.doctor && (
-                                                    <div className="flex items-center text-gray-700">
-                                                      <FaUserMd className="mr-2 text-blue-600" />
-                                                      <div>
-                                                        <p className="font-medium">
-                                                          👨‍⚕️ {prescription.appointment.doctor.user?.firstName} {prescription.appointment.doctor.user?.lastName}
-                                                        </p>
-                                                        {prescription.appointment.doctor.specialty && (
-                                                          <p className="text-xs text-gray-500">
-                                                            {prescription.appointment.doctor.specialty}
-                                                          </p>
-                                                        )}
-                                                      </div>
-                                                    </div>
-                                                  )}
-                                                  <div className="flex items-center text-gray-700">
-                                                    <FaClock className="mr-2 text-teal-600" />
-                                                    <div>
-                                                      <p className="font-medium text-xs">Кездесу уақыты:</p>
-                                                      <p className="text-xs text-gray-600">
-                                                        {formatDateTime(prescription.appointment.appointmentDate)}
-                                                      </p>
-                                                    </div>
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            )}
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-
-                {/* История приемов */}
-                <motion.div 
-                  className="bg-white rounded-2xl shadow-xl border border-gray-200"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                >
-                  <div className="p-6 bg-gradient-to-r from-teal-600 to-cyan-600 text-white rounded-t-2xl">
-                    <h3 className="text-2xl font-bold flex items-center">
-                      <FaHistory className="mr-3" />
-                      Кездесулер Тарихы
-                    </h3>
-                    <p className="text-teal-100 text-sm mt-1">
-                      Барлық кездесулер мен консультациялар
-                    </p>
-                  </div>
-
-                  <div className="p-6">
-                    {appointments.length === 0 ? (
-                      <div className="text-center py-12">
-                        <FaCalendar className="text-5xl text-gray-300 mx-auto mb-4" />
-                        <p className="text-gray-600 text-lg font-medium">Кездесулер жоқ</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {appointments.map((appointment) => (
-                          <div 
-                            key={appointment.appointmentId}
-                            className="p-4 bg-gradient-to-r from-teal-50 to-cyan-50 rounded-xl border-2 border-teal-200 hover:shadow-md transition-all"
-                          >
-                            <div className="flex items-center justify-between mb-3">
-                              <div className="flex items-center">
-                                <div className="p-2 bg-teal-600 rounded-lg mr-3">
-                                  <FaCalendar className="text-white" />
-                                </div>
-                                <div>
-                                  <p className="font-bold text-gray-800">
-                                    Кездесу #{appointment.appointmentId}
-                                  </p>
-                                  <p className="text-sm text-gray-600">
-                                    {formatDateTime(appointment.appointmentDate)}
-                                  </p>
-                                </div>
-                              </div>
-                              <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                                appointment.status === 'COMPLETED' || appointment.status === 'completed'
-                                  ? 'bg-green-100 text-green-800'
-                                  : appointment.status === 'CONFIRMED' || appointment.status === 'confirmed'
-                                  ? 'bg-blue-100 text-blue-800'
-                                  : appointment.status === 'CANCELLED' || appointment.status === 'cancelled'
-                                  ? 'bg-red-100 text-red-800'
-                                  : 'bg-yellow-100 text-yellow-800'
-                              }`}>
-                                {appointment.status}
-                              </span>
-                            </div>
-
-                            {appointment.doctor && (
-                              <div className="flex items-center text-sm text-gray-700 bg-white p-3 rounded-lg">
-                                <FaUserMd className="mr-2 text-teal-600" />
-                                <span className="font-medium">
-                                  Дәрігер: {appointment.doctor.user?.firstName} {appointment.doctor.user?.lastName}
-                                </span>
-                                {appointment.doctor.specialty && (
-                                  <span className="ml-2 text-gray-500">
-                                    • {appointment.doctor.specialty}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                      <>
+                        {activeTab === 'medicalHistory' && renderMedicalHistory()}
+                        {activeTab === 'labResults' && renderLabResults()}
+                        {activeTab === 'appointments' && renderAppointments()}
+                      </>
                     )}
                   </div>
                 </motion.div>

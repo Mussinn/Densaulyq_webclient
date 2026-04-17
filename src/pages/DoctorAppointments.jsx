@@ -39,9 +39,9 @@ const DoctorAppointments = () => {
   const [loading, setLoading] = useState(true);
   const [meetingsLoading, setMeetingsLoading] = useState(false);
   const [filter, setFilter] = useState('all');
-  const [activeTab, setActiveTab] = useState('appointments'); // appointments | patients | meetings
+  const [activeTab, setActiveTab] = useState('appointments');
 
-  // Платежи
+  // Төлемдер
   const [showCreatePaymentModal, setShowCreatePaymentModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentDetails, setPaymentDetails] = useState(null);
@@ -53,11 +53,11 @@ const DoctorAppointments = () => {
   const [isCustomAmount, setIsCustomAmount] = useState(false);
   const [paymentError, setPaymentError] = useState('');
   
-  // Для пациентов
+  // Пациенттер үшін
   const [patients, setPatients] = useState([]);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [patientSearchQuery, setPatientSearchQuery] = useState('');
-  const [patientFilter, setPatientFilter] = useState('all'); // all | frequent | recent
+  const [patientFilter, setPatientFilter] = useState('all');
 
   const [showMeetingModal, setShowMeetingModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
@@ -65,7 +65,7 @@ const DoctorAppointments = () => {
   const [inviteEmail, setInviteEmail] = useState('');
   const [sendingInvite, setSendingInvite] = useState(false);
 
-  // Для шаринга встречи другому доктору
+  // Басқа дәрігермен кездесуді бөлісу үшін
   const [showShareModal, setShowShareModal] = useState(false);
   const [selectedMeetingToShare, setSelectedMeetingToShare] = useState(null);
   const [doctors, setDoctors] = useState([]);
@@ -74,18 +74,17 @@ const DoctorAppointments = () => {
 
   const { token } = useSelector((state) => state.token);
 
-  // Пресеты сумм для оплаты
+  // Төлем сомаларының пресеттері
   const presetAmounts = [3000, 5000, 7000, 10000, 15000];
 
-  // Функция создания платежа
+  // Төлем жасау функциясы
   const createPayment = async () => {
     try {
-      // Валидация суммы
       let amount = paymentAmount;
       if (isCustomAmount) {
         amount = parseInt(customAmount);
         if (isNaN(amount) || amount < 100) {
-          setPaymentError('Минимальная сумма 100 ₸');
+          setPaymentError('Ең төменгі сома 100 ₸');
           return;
         }
       }
@@ -93,7 +92,6 @@ const DoctorAppointments = () => {
       setCreatingPayment(true);
       setPaymentError('');
 
-      // Получаем ID доктора
       const userRes = await api.get('/api/v1/users/me', {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -104,7 +102,7 @@ const DoctorAppointments = () => {
         appointmentId: selectedAppointmentForPayment.id,
         amount: amount,
         currency: 'KZT',
-        description: `Консультация с ${selectedAppointmentForPayment.patientName}`,
+        description: `${selectedAppointmentForPayment.patientName} -мен кеңес`,
         patientEmail: selectedAppointmentForPayment.patientEmail
       }, {
         headers: { Authorization: `Bearer ${token}` },
@@ -113,24 +111,22 @@ const DoctorAppointments = () => {
       setPaymentDetails(response.data);
       setPaymentLink(response.data.paymentUrl);
       
-      // Закрываем модалку создания и открываем модалку с ссылкой
       setShowCreatePaymentModal(false);
       setShowPaymentModal(true);
       
-      // Сбрасываем состояние
       setPaymentAmount(5000);
       setCustomAmount('');
       setIsCustomAmount(false);
       
     } catch (err) {
-      console.error('Ошибка создания платежа:', err);
+      console.error('Төлем жасау қатесі:', err);
       setPaymentError(err.response?.data?.error || err.message);
     } finally {
       setCreatingPayment(false);
     }
   };
 
-  // Открыть модалку создания платежа
+  // Төлем жасау модальды терезесін ашу
   const openCreatePaymentModal = (appointment) => {
     setSelectedAppointmentForPayment(appointment);
     setPaymentAmount(5000);
@@ -140,7 +136,7 @@ const DoctorAppointments = () => {
     setShowCreatePaymentModal(true);
   };
 
-  // Обработчик выбора суммы
+  // Сома таңдау өңдеушісі
   const handleAmountSelect = (amount) => {
     setPaymentAmount(amount);
     setIsCustomAmount(false);
@@ -148,7 +144,7 @@ const DoctorAppointments = () => {
     setPaymentError('');
   };
 
-  // Обработчик изменения своей суммы
+  // Өз сомасын өзгерту өңдеушісі
   const handleCustomAmountChange = (e) => {
     const value = e.target.value.replace(/[^0-9]/g, '');
     setCustomAmount(value);
@@ -158,16 +154,16 @@ const DoctorAppointments = () => {
     setPaymentError('');
   };
 
-  // Копирование ссылки
+  // Сілтемені көшіру
   const copyLink = (url) => {
     if (url) {
       navigator.clipboard.writeText(url);
-      alert('Ссылка скопирована в буфер обмена');
+      alert('Сілтеме алмасу буферіне көшірілді');
     }
   };
 
   // ────────────────────────────────────────────────
-  // Загрузка данных доктора и его записей
+  // Дәрігердің деректерін және оның жазбаларын жүктеу
   // ────────────────────────────────────────────────
   const fetchData = async () => {
     try {
@@ -194,21 +190,20 @@ const DoctorAppointments = () => {
 
         setAppointments(normalizedAppointments);
 
-        // Формируем список пациентов
         processPatients(normalizedAppointments);
 
         await fetchMeetings(doctorId);
       }
     } catch (err) {
-      console.error('Ошибка загрузки данных:', err);
-      alert('Ошибка загрузки данных');
+      console.error('Деректерді жүктеу қатесі:', err);
+      alert('Деректерді жүктеу қатесі');
     } finally {
       setLoading(false);
     }
   };
 
   // ────────────────────────────────────────────────
-  // Обработка пациентов из записей
+  // Жазбалардан пациенттерді өңдеу
   // ────────────────────────────────────────────────
   const processPatients = (appointmentsList) => {
     const patientsMap = {};
@@ -265,14 +260,14 @@ const DoctorAppointments = () => {
       });
       setMeetings(response.data || []);
     } catch (err) {
-      console.error('Ошибка загрузки встреч:', err);
+      console.error('Кездесулерді жүктеу қатесі:', err);
       setMeetings([]);
     } finally {
       setMeetingsLoading(false);
     }
   };
 
-  // Загрузка списка всех врачей
+  // Барлық дәрігерлер тізімін жүктеу
   const fetchDoctors = async () => {
     try {
       const response = await api.get('/api/v1/doctor', {
@@ -283,7 +278,7 @@ const DoctorAppointments = () => {
         const user = doctor.user || {};
         return {
           id: doctor.doctorId,
-          fullName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Доктор без имени',
+          fullName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Дәрігер',
           email: user.email || '',
           specialty: doctor.specialty || '—',
           user: user,
@@ -292,12 +287,12 @@ const DoctorAppointments = () => {
 
       setDoctors(doctorsData);
     } catch (err) {
-      console.error('Не удалось загрузить список врачей:', err);
+      console.error('Дәрігерлер тізімін жүктеу мүмкін болмады:', err);
     }
   };
 
   // ────────────────────────────────────────────────
-  // Обновление статуса записи на приём
+  // Қабылдау мәртебесін жаңарту
   // ────────────────────────────────────────────────
   const updateStatus = async (id, status) => {
     try {
@@ -309,20 +304,19 @@ const DoctorAppointments = () => {
         app.id === id ? { ...app, status } : app
       ));
 
-      // Обновляем список пациентов
       const updatedAppointments = appointments.map(app =>
         app.id === id ? { ...app, status } : app
       );
       processPatients(updatedAppointments);
 
-      alert(`Статус изменён на: ${status}`);
+      alert(`Мәртебе өзгертілді: ${status}`);
     } catch (err) {
-      alert('Ошибка обновления статуса: ' + (err.response?.data?.message || err.message));
+      alert('Мәртебені жаңарту қатесі: ' + (err.response?.data?.message || err.message));
     }
   };
 
   // ────────────────────────────────────────────────
-  // Создание видеовстречи
+  // Видеокездесу құру
   // ────────────────────────────────────────────────
   const openMeetingModal = async (appointment) => {
     setSelectedAppointment(appointment);
@@ -336,12 +330,12 @@ const DoctorAppointments = () => {
     const cleanedEmail = inviteEmail?.trim() || '';
 
     if (!cleanedEmail) {
-      alert('Введите email пациента');
+      alert('Пациенттің email-ін енгізіңіз');
       return;
     }
 
     if (!emailRegex.test(cleanedEmail)) {
-      alert('Введите корректный email адрес');
+      alert('Дұрыс email мекенжайын енгізіңіз');
       return;
     }
 
@@ -355,15 +349,15 @@ const DoctorAppointments = () => {
       const doctorId = user?.doctor?.doctorId || user?.userId;
 
       if (!doctorId || !selectedAppointment?.patientId) {
-        throw new Error('Недостаточно данных для создания встречи');
+        throw new Error('Кездесу құру үшін деректер жеткіліксіз');
       }
 
       const response = await api.post('/api/v1/meetings', {
         appointmentId: Number(selectedAppointment?.id) || 0,
         doctorId: Number(doctorId) || 0,
         patientId: Number(selectedAppointment?.patientId) || 0,
-        topic: `Консультация с ${selectedAppointment?.patientName}`,
-        description: 'Консультация врача',
+        topic: `${selectedAppointment?.patientName} -мен кеңес`,
+        description: 'Дәрігерлік кеңес',
         scheduledTime: new Date().toISOString(),
         durationMinutes: 30,
         patientEmail: cleanedEmail,
@@ -379,21 +373,21 @@ const DoctorAppointments = () => {
       setMeetingData({
         meetingUrl: meeting.meetingUrl,
         roomId: meeting.roomId,
-        message: 'Встреча создана и приглашение отправлено',
+        message: 'Кездесу құрылды және шақыру жіберілді',
         id: meeting.id
       });
 
       await fetchMeetings(doctorId);
     } catch (err) {
-      console.error('Ошибка создания встречи:', err);
-      alert(err.response?.data?.message || 'Не удалось создать встречу');
+      console.error('Кездесу құру қатесі:', err);
+      alert(err.response?.data?.message || 'Кездесу құру мүмкін болмады');
     } finally {
       setSendingInvite(false);
     }
   };
 
   // ────────────────────────────────────────────────
-  // Поделиться встречей с другим врачом
+  // Кездесуді басқа дәрігермен бөлісу
   // ────────────────────────────────────────────────
   const openShareModal = (meeting) => {
     setSelectedMeetingToShare(meeting);
@@ -403,18 +397,18 @@ const DoctorAppointments = () => {
 
   const shareMeetingWithDoctor = async () => {
     if (!selectedDoctorId) {
-      alert('Выберите врача');
+      alert('Дәрігерді таңдаңыз');
       return;
     }
 
     const doctor = doctors.find(d => d.id === parseInt(selectedDoctorId));
     if (!doctor?.email) {
-      alert('У выбранного врача не указан email');
+      alert('Таңдалған дәрігердің email-і көрсетілмеген');
       return;
     }
 
     if (!selectedMeetingToShare?.meetingUrl) {
-      alert('Нет ссылки на встречу');
+      alert('Кездесу сілтемесі жоқ');
       return;
     }
 
@@ -431,14 +425,14 @@ const DoctorAppointments = () => {
         },
       });
 
-      alert(`Ссылка успешно отправлена на ${doctor.fullName} (${doctor.email})`);
+      alert(`Сілтеме ${doctor.fullName} (${doctor.email}) мекенжайына сәтті жіберілді`);
       setShowShareModal(false);
       setSelectedDoctorId('');
       setSelectedMeetingToShare(null);
     } catch (err) {
-      console.error('Ошибка отправки ссылки:', err);
-      const errorMessage = err.response?.data?.message || err.message || 'Неизвестная ошибка';
-      alert(`Не удалось отправить ссылку\n${errorMessage}`);
+      console.error('Сілтеме жіберу қатесі:', err);
+      const errorMessage = err.response?.data?.message || err.message || 'Белгісіз қате';
+      alert(`Сілтеме жіберу мүмкін болмады\n${errorMessage}`);
     } finally {
       setSharing(false);
     }
@@ -453,19 +447,19 @@ const DoctorAppointments = () => {
       setMeetings(prev => prev.map(m =>
         m.id === meetingId ? { ...m, status } : m
       ));
-      alert(`Статус встречи изменён: ${status}`);
+      alert(`Кездесу мәртебесі өзгертілді: ${status}`);
     } catch (err) {
-      alert('Ошибка изменения статуса встречи');
+      alert('Кездесу мәртебесін өзгерту қатесі');
     }
   };
 
   // ────────────────────────────────────────────────
-  // Форматирование и вспомогательные функции
+  // Пішімдеу және көмекші функциялар
   // ────────────────────────────────────────────────
   const formatDateTime = (dateString) => {
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString('ru-RU', {
+      return date.toLocaleDateString('kk-KZ', {
         day: 'numeric',
         month: 'short',
         year: 'numeric',
@@ -480,7 +474,7 @@ const DoctorAppointments = () => {
   const formatDate = (dateString) => {
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString('ru-RU', {
+      return date.toLocaleDateString('kk-KZ', {
         day: 'numeric',
         month: 'short',
         year: 'numeric'
@@ -492,10 +486,10 @@ const DoctorAppointments = () => {
 
   const getAppointmentStatusText = (status) => {
     switch (status) {
-      case 'scheduled': return 'Запланирована';
-      case 'confirmed': return 'Подтверждена';
-      case 'completed': return 'Завершена';
-      case 'cancelled': return 'Отменена';
+      case 'scheduled': return 'Жоспарланған';
+      case 'confirmed': return 'Расталған';
+      case 'completed': return 'Аяқталған';
+      case 'cancelled': return 'Болдырылмаған';
       default: return status || '—';
     }
   };
@@ -512,10 +506,10 @@ const DoctorAppointments = () => {
 
   const getMeetingStatusText = (status) => {
     switch (status) {
-      case 'SCHEDULED': return 'Запланирована';
-      case 'ACTIVE': return 'Активна';
-      case 'COMPLETED': return 'Завершена';
-      case 'CANCELLED': return 'Отменена';
+      case 'SCHEDULED': return 'Жоспарланған';
+      case 'ACTIVE': return 'Белсенді';
+      case 'COMPLETED': return 'Аяқталған';
+      case 'CANCELLED': return 'Болдырылмаған';
       default: return status || '—';
     }
   };
@@ -531,7 +525,7 @@ const DoctorAppointments = () => {
   };
 
   // ────────────────────────────────────────────────
-  // Фильтрация пациентов
+  // Пациенттерді сүзгілеу
   // ────────────────────────────────────────────────
   const getFilteredPatients = () => {
     let filtered = patients;
@@ -557,7 +551,7 @@ const DoctorAppointments = () => {
   };
 
   // ────────────────────────────────────────────────
-  // Эффекты
+  // Эффекттер
   // ────────────────────────────────────────────────
   useEffect(() => {
     if (token) {
@@ -580,12 +574,12 @@ const DoctorAppointments = () => {
   // ────────────────────────────────────────────────
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
-      {/* Заголовок */}
+      {/* Тақырып */}
       <div className="mb-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">Панель врача</h1>
-            <p className="text-gray-600">Управление приемами, пациентами и встречами</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">Дәрігер панелі</h1>
+            <p className="text-gray-600">Қабылдауларды, пациенттерді және кездесулерді басқару</p>
           </div>
           <button
             onClick={fetchData}
@@ -595,17 +589,17 @@ const DoctorAppointments = () => {
             {loading ? (
               <>
                 <FaSpinner className="animate-spin mr-2" />
-                Загрузка...
+                Жүктелуде...
               </>
             ) : (
               <>
-                <FaCalendar className="mr-2" /> Обновить
+                <FaCalendar className="mr-2" /> Жаңарту
               </>
             )}
           </button>
         </div>
 
-        {/* Табы */}
+        {/* Қойындылар */}
         <div className="bg-white rounded-2xl p-2 shadow-sm border border-gray-100">
           <div className="flex flex-wrap gap-2">
             <button
@@ -615,7 +609,7 @@ const DoctorAppointments = () => {
                   : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
                 }`}
             >
-              <FaCalendar className="mr-2" /> Записи на прием
+              <FaCalendar className="mr-2" /> Қабылдау жазбалары
               <span className="ml-2 px-2 py-0.5 bg-white/20 rounded-full text-xs">
                 {filteredApps.length}
               </span>
@@ -628,7 +622,7 @@ const DoctorAppointments = () => {
                   : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
                 }`}
             >
-              <FaUsers className="mr-2" /> Мои пациенты
+              <FaUsers className="mr-2" /> Менің пациенттерім
               <span className="ml-2 px-2 py-0.5 bg-white/20 rounded-full text-xs">
                 {patients.length}
               </span>
@@ -641,7 +635,7 @@ const DoctorAppointments = () => {
                   : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
                 }`}
             >
-              <FaVideo className="mr-2" /> Видеовстречи
+              <FaVideo className="mr-2" /> Видеокездесулер
               <span className="ml-2 px-2 py-0.5 bg-white/20 rounded-full text-xs">
                 {meetings.length}
               </span>
@@ -651,15 +645,15 @@ const DoctorAppointments = () => {
       </div>
 
       {/* ════════════════════════════════════════════ */}
-      {/* ВКЛАДКА: ЗАПИСИ НА ПРИЕМ */}
+      {/* ҚОЙЫНДЫ: ҚАБЫЛДАУ ЖАЗБАЛАРЫ */}
       {/* ════════════════════════════════════════════ */}
       {activeTab === 'appointments' && (
         <>
-          {/* Фильтры записей */}
+          {/* Жазбалар сүзгілері */}
           <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-6">
             <div className="flex items-center mb-3">
               <FaFilter className="text-gray-500 mr-2" />
-              <span className="font-medium text-gray-700">Фильтры:</span>
+              <span className="font-medium text-gray-700">Сүзгілер:</span>
             </div>
             <div className="flex flex-wrap gap-2">
               <button
@@ -667,33 +661,33 @@ const DoctorAppointments = () => {
                 className={`px-4 py-2.5 rounded-xl flex items-center transition-all ${filter === 'all' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
                   }`}
               >
-                <FaCalendar className="mr-2" /> Все записи
+                <FaCalendar className="mr-2" /> Барлық жазбалар
               </button>
               <button
                 onClick={() => setFilter('active')}
                 className={`px-4 py-2.5 rounded-xl flex items-center transition-all ${filter === 'active' ? 'bg-green-600 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
                   }`}
               >
-                <FaCheckCircle className="mr-2" /> Активные
+                <FaCheckCircle className="mr-2" /> Белсенді
               </button>
               <button
                 onClick={() => setFilter('completed')}
                 className={`px-4 py-2.5 rounded-xl flex items-center transition-all ${filter === 'completed' ? 'bg-gray-600 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
                   }`}
               >
-                <FaCheck className="mr-2" /> Завершенные
+                <FaCheck className="mr-2" /> Аяқталған
               </button>
               <button
                 onClick={() => setFilter('cancelled')}
                 className={`px-4 py-2.5 rounded-xl flex items-center transition-all ${filter === 'cancelled' ? 'bg-red-600 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
                   }`}
               >
-                <FaTimes className="mr-2" /> Отмененные
+                <FaTimes className="mr-2" /> Болдырылмаған
               </button>
             </div>
           </div>
 
-          {/* Список записей */}
+          {/* Жазбалар тізімі */}
           <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
             <div className="p-6 border-b border-gray-100">
               <div className="flex items-center justify-between">
@@ -702,12 +696,12 @@ const DoctorAppointments = () => {
                     <FaUserMd className="text-xl text-blue-600" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-gray-800">Записи пациентов</h2>
-                    <p className="text-sm text-gray-500">Запланированные приемы</p>
+                    <h2 className="text-xl font-bold text-gray-800">Пациенттердің жазбалары</h2>
+                    <p className="text-sm text-gray-500">Жоспарланған қабылдаулар</p>
                   </div>
                 </div>
                 <span className="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full">
-                  {filteredApps.length} записей
+                  {filteredApps.length} жазба
                 </span>
               </div>
             </div>
@@ -716,13 +710,13 @@ const DoctorAppointments = () => {
               {loading ? (
                 <div className="py-12 text-center">
                   <FaSpinner className="animate-spin mx-auto text-3xl text-blue-600 mb-4" />
-                  <p className="text-gray-600">Загрузка записей...</p>
+                  <p className="text-gray-600">Жазбалар жүктелуде...</p>
                 </div>
               ) : filteredApps.length === 0 ? (
                 <div className="py-12 text-center">
                   <FaCalendar className="text-4xl mx-auto text-gray-400 mb-3" />
-                  <h3 className="text-lg font-medium text-gray-700 mb-2">Нет записей</h3>
-                  <p className="text-gray-500">Выберите другой фильтр или проверьте позже</p>
+                  <h3 className="text-lg font-medium text-gray-700 mb-2">Жазбалар жоқ</h3>
+                  <p className="text-gray-500">Басқа сүзгіні таңдаңыз немесе кейінірек тексеріңіз</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -764,13 +758,13 @@ const DoctorAppointments = () => {
                                 onClick={() => updateStatus(app.id, 'confirmed')}
                                 className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 text-sm font-medium"
                               >
-                                <FaCheck className="mr-2 inline" /> Подтвердить
+                                <FaCheck className="mr-2 inline" /> Растау
                               </button>
                               <button
                                 onClick={() => updateStatus(app.id, 'cancelled')}
                                 className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 text-sm font-medium"
                               >
-                                <FaTimes className="mr-2 inline" /> Отменить
+                                <FaTimes className="mr-2 inline" /> Болдырмау
                               </button>
                             </>
                           )}
@@ -781,13 +775,13 @@ const DoctorAppointments = () => {
                                 onClick={() => updateStatus(app.id, 'completed')}
                                 className="px-4 py-2 bg-gray-700 text-white rounded-xl hover:bg-gray-800 text-sm font-medium flex items-center"
                               >
-                                <FaCheckCircle className="mr-2" /> Завершить
+                                <FaCheckCircle className="mr-2" /> Аяқтау
                               </button>
                               <button
                                 onClick={() => openMeetingModal(app)}
                                 className="px-4 py-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700 text-sm font-medium flex items-center"
                               >
-                                <FaVideo className="mr-2" /> Видеовстреча
+                                <FaVideo className="mr-2" /> Видеокездесу
                               </button>
                             </>
                           )}
@@ -800,9 +794,9 @@ const DoctorAppointments = () => {
                                 className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 text-sm font-medium flex items-center justify-center"
                               >
                                 {creatingPayment && selectedAppointmentForPayment?.id === app.id ? (
-                                  <><FaSpinner className="animate-spin mr-2" /> Создание...</>
+                                  <><FaSpinner className="animate-spin mr-2" /> Жасалуда...</>
                                 ) : (
-                                  <><FaCreditCard className="mr-2" /> Выставить счет</>
+                                  <><FaCreditCard className="mr-2" /> Шот ұсыну</>
                                 )}
                               </button>
                             </>
@@ -810,7 +804,7 @@ const DoctorAppointments = () => {
 
                           {(app.status === 'cancelled') && (
                             <div className="text-center p-2 text-sm font-medium text-red-600">
-                              Прием отменен
+                              Қабылдау болдырылды
                             </div>
                           )}
                         </div>
@@ -825,23 +819,23 @@ const DoctorAppointments = () => {
       )}
 
       {/* ════════════════════════════════════════════ */}
-      {/* ВКЛАДКА: МОИ ПАЦИЕНТЫ */}
+      {/* ҚОЙЫНДЫ: МЕНІҢ ПАЦИЕНТТЕРІМ */}
       {/* ════════════════════════════════════════════ */}
       {activeTab === 'patients' && (
         <>
-          {/* Фильтры и поиск пациентов */}
+          {/* Пациенттерді сүзгілеу және іздеу */}
           <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   <FaSearch className="inline mr-2" />
-                  Поиск пациента:
+                  Пациентті іздеу:
                 </label>
                 <input
                   type="text"
                   value={patientSearchQuery}
                   onChange={(e) => setPatientSearchQuery(e.target.value)}
-                  placeholder="Имя, email или телефон..."
+                  placeholder="Аты, email немесе телефоны..."
                   className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-emerald-500"
                 />
               </div>
@@ -849,7 +843,7 @@ const DoctorAppointments = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   <FaFilter className="inline mr-2" />
-                  Категория:
+                  Санат:
                 </label>
                 <div className="flex gap-2">
                   <button
@@ -857,7 +851,7 @@ const DoctorAppointments = () => {
                     className={`flex-1 px-4 py-2.5 rounded-xl transition-all text-sm font-medium ${patientFilter === 'all' ? 'bg-emerald-600 text-white' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
                       }`}
                   >
-                    Все
+                    Барлығы
                   </button>
                   <button
                     onClick={() => setPatientFilter('frequent')}
@@ -865,7 +859,7 @@ const DoctorAppointments = () => {
                       }`}
                   >
                     <FaStar className="inline mr-1" />
-                    Частые (≥3)
+                    Жиі (≥3)
                   </button>
                   <button
                     onClick={() => setPatientFilter('recent')}
@@ -873,14 +867,14 @@ const DoctorAppointments = () => {
                       }`}
                   >
                     <FaClock className="inline mr-1" />
-                    Недавние
+                    Жақында
                   </button>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Список пациентов */}
+          {/* Пациенттер тізімі */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-1">
               <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
@@ -889,10 +883,10 @@ const DoctorAppointments = () => {
                     <div>
                       <h2 className="text-xl font-bold text-gray-800 flex items-center">
                         <FaUsers className="mr-2 text-emerald-600" />
-                        Пациенты
+                        Пациенттер
                       </h2>
                       <p className="text-sm text-gray-600 mt-1">
-                        Найдено: {filteredPatients.length}
+                        Табылды: {filteredPatients.length}
                       </p>
                     </div>
                   </div>
@@ -902,13 +896,13 @@ const DoctorAppointments = () => {
                   {loading ? (
                     <div className="py-12 text-center">
                       <FaSpinner className="animate-spin mx-auto text-3xl text-emerald-600 mb-4" />
-                      <p className="text-gray-600">Загрузка...</p>
+                      <p className="text-gray-600">Жүктелуде...</p>
                     </div>
                   ) : filteredPatients.length === 0 ? (
                     <div className="py-12 text-center px-4">
                       <FaUsers className="text-4xl mx-auto text-gray-400 mb-3" />
-                      <h3 className="text-lg font-medium text-gray-700 mb-2">Нет пациентов</h3>
-                      <p className="text-gray-500 text-sm">Измените фильтры или поиск</p>
+                      <h3 className="text-lg font-medium text-gray-700 mb-2">Пациенттер жоқ</h3>
+                      <p className="text-gray-500 text-sm">Сүзгілерді немесе іздеуді өзгертіңіз</p>
                     </div>
                   ) : (
                     <div className="p-3 space-y-2">
@@ -934,12 +928,12 @@ const DoctorAppointments = () => {
                           <div className={`flex items-center text-sm mb-1 ${selectedPatient?.id === patient.id ? 'text-emerald-50' : 'text-gray-600'
                             }`}>
                             <FaCalendar className="mr-2" size={12} />
-                            <span>{patient.totalAppointments} приёмов</span>
+                            <span>{patient.totalAppointments} қабылдау</span>
                           </div>
                           <div className={`flex items-center text-sm ${selectedPatient?.id === patient.id ? 'text-emerald-50' : 'text-gray-500'
                             }`}>
                             <FaClock className="mr-2" size={12} />
-                            <span>Последний: {formatDate(patient.lastVisit)}</span>
+                            <span>Соңғысы: {formatDate(patient.lastVisit)}</span>
                           </div>
                         </button>
                       ))}
@@ -983,44 +977,44 @@ const DoctorAppointments = () => {
                     <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
                       <h3 className="font-bold text-gray-800 mb-4 flex items-center text-lg">
                         <FaChartLine className="mr-2 text-emerald-600" />
-                        Статистика посещений
+                        Келу статистикасы
                       </h3>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="bg-white p-4 rounded-xl border-2 border-blue-100 text-center">
                           <div className="text-3xl font-bold text-blue-600 mb-1">
                             {selectedPatient.totalAppointments}
                           </div>
-                          <div className="text-xs text-gray-600 font-medium">Всего приёмов</div>
+                          <div className="text-xs text-gray-600 font-medium">Барлық қабылдау</div>
                         </div>
                         <div className="bg-white p-4 rounded-xl border-2 border-green-100 text-center">
                           <div className="text-3xl font-bold text-green-600 mb-1">
                             {selectedPatient.completedAppointments}
                           </div>
-                          <div className="text-xs text-gray-600 font-medium">Завершено</div>
+                          <div className="text-xs text-gray-600 font-medium">Аяқталған</div>
                         </div>
                         <div className="bg-white p-4 rounded-xl border-2 border-yellow-100 text-center">
                           <div className="text-3xl font-bold text-yellow-600 mb-1">
                             {selectedPatient.scheduledAppointments}
                           </div>
-                          <div className="text-xs text-gray-600 font-medium">Запланировано</div>
+                          <div className="text-xs text-gray-600 font-medium">Жоспарланған</div>
                         </div>
                         <div className="bg-white p-4 rounded-xl border-2 border-red-100 text-center">
                           <div className="text-3xl font-bold text-red-600 mb-1">
                             {selectedPatient.cancelledAppointments}
                           </div>
-                          <div className="text-xs text-gray-600 font-medium">Отменено</div>
+                          <div className="text-xs text-gray-600 font-medium">Болдырылмаған</div>
                         </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-4 mt-4">
                         <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-4 rounded-xl border border-purple-200">
-                          <div className="text-sm text-gray-600 mb-1 font-medium">Первое посещение</div>
+                          <div className="text-sm text-gray-600 mb-1 font-medium">Бірінші келу</div>
                           <div className="text-lg font-bold text-purple-700">
                             {formatDate(selectedPatient.firstVisit)}
                           </div>
                         </div>
                         <div className="bg-gradient-to-r from-cyan-50 to-blue-50 p-4 rounded-xl border border-cyan-200">
-                          <div className="text-sm text-gray-600 mb-1 font-medium">Последнее посещение</div>
+                          <div className="text-sm text-gray-600 mb-1 font-medium">Соңғы келу</div>
                           <div className="text-lg font-bold text-cyan-700">
                             {formatDate(selectedPatient.lastVisit)}
                           </div>
@@ -1031,7 +1025,7 @@ const DoctorAppointments = () => {
                     <div className="p-6">
                       <h3 className="font-bold text-gray-800 mb-4 flex items-center text-lg">
                         <FaHistory className="mr-2 text-emerald-600" />
-                        История приёмов ({selectedPatient.appointments.length})
+                        Қабылдау тарихы ({selectedPatient.appointments.length})
                       </h3>
                       <div className="max-h-[400px] overflow-y-auto space-y-3">
                         {selectedPatient.appointments
@@ -1060,8 +1054,8 @@ const DoctorAppointments = () => {
                 ) : (
                   <div className="py-20 text-center">
                     <FaUserInjured className="text-5xl mx-auto text-gray-300 mb-4" />
-                    <h3 className="text-xl font-medium text-gray-700 mb-2">Выберите пациента</h3>
-                    <p className="text-gray-500">Нажмите на пациента слева, чтобы увидеть детали</p>
+                    <h3 className="text-xl font-medium text-gray-700 mb-2">Пациентті таңдаңыз</h3>
+                    <p className="text-gray-500">Толық ақпаратты көру үшін сол жақтағы пациентті басыңыз</p>
                   </div>
                 )}
               </div>
@@ -1071,7 +1065,7 @@ const DoctorAppointments = () => {
       )}
 
       {/* ════════════════════════════════════════════ */}
-      {/* ВКЛАДКА: ВИДЕОВСТРЕЧИ */}
+      {/* ҚОЙЫНДЫ: ВИДЕОКЕЗДЕСУЛЕР */}
       {/* ════════════════════════════════════════════ */}
       {activeTab === 'meetings' && (
         <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
@@ -1082,14 +1076,14 @@ const DoctorAppointments = () => {
                   <FaVideo className="text-xl text-purple-600" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-gray-800">Видеовстречи</h2>
-                  <p className="text-sm text-gray-500">Созданные консультации</p>
+                  <h2 className="text-xl font-bold text-gray-800">Видеокездесулер</h2>
+                  <p className="text-sm text-gray-500">Құрылған кеңестер</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 {meetingsLoading && <FaSpinner className="animate-spin text-purple-600" />}
                 <span className="bg-purple-100 text-purple-800 text-sm font-medium px-3 py-1 rounded-full">
-                  {meetings.length} встреч
+                  {meetings.length} кездесу
                 </span>
               </div>
             </div>
@@ -1099,13 +1093,13 @@ const DoctorAppointments = () => {
             {meetingsLoading ? (
               <div className="py-12 text-center">
                 <FaSpinner className="animate-spin mx-auto text-3xl text-purple-600 mb-4" />
-                <p className="text-gray-600">Загрузка встреч...</p>
+                <p className="text-gray-600">Кездесулер жүктелуде...</p>
               </div>
             ) : meetings.length === 0 ? (
               <div className="py-12 text-center">
                 <FaVideo className="text-4xl mx-auto text-gray-400 mb-3" />
-                <h3 className="text-lg font-medium text-gray-700 mb-2">Нет встреч</h3>
-                <p className="text-gray-500">Создайте первую видеовстречу из записи пациента</p>
+                <h3 className="text-lg font-medium text-gray-700 mb-2">Кездесулер жоқ</h3>
+                <p className="text-gray-500">Пациент жазбасынан бірінші видеокездесуді құрыңыз</p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -1113,7 +1107,7 @@ const DoctorAppointments = () => {
                   <div key={meeting.id} className="bg-gray-50 rounded-xl p-4 hover:bg-purple-50 transition-all border border-gray-100">
                     <div className="mb-3">
                       <h3 className="font-bold text-gray-800 text-lg mb-1">
-                        {meeting.topic || 'Консультация'}
+                        {meeting.topic || 'Кеңес'}
                       </h3>
                       {meeting.patientEmail && (
                         <p className="text-gray-600 text-sm flex items-center">
@@ -1140,14 +1134,14 @@ const DoctorAppointments = () => {
                             onClick={() => updateMeetingStatus(meeting.id, 'ACTIVE')}
                             className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 text-sm font-medium flex items-center"
                           >
-                            <FaPlay className="mr-2" /> Начать
+                            <FaPlay className="mr-2" /> Бастау
                           </button>
                           {meeting.meetingUrl && (
                             <button
                               onClick={() => window.open(meeting.meetingUrl, '_blank')}
                               className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-sm font-medium flex items-center"
                             >
-                              <FaVideo className="mr-2" /> Присоединиться
+                              <FaVideo className="mr-2" /> Қосылу
                             </button>
                           )}
                         </>
@@ -1159,25 +1153,25 @@ const DoctorAppointments = () => {
                             onClick={() => updateMeetingStatus(meeting.id, 'COMPLETED')}
                             className="px-4 py-2 bg-gray-700 text-white rounded-xl hover:bg-gray-800 text-sm font-medium flex items-center"
                           >
-                            <FaStop className="mr-2" /> Завершить
+                            <FaStop className="mr-2" /> Аяқтау
                           </button>
                           <button
                             onClick={() => window.open(meeting.meetingUrl, '_blank')}
                             className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 text-sm font-medium flex items-center"
                           >
-                            <FaVideo className="mr-2" /> Присоединиться
+                            <FaVideo className="mr-2" /> Қосылу
                           </button>
                           <button
                             onClick={() => copyLink(meeting.meetingUrl)}
                             className="px-4 py-2 bg-gray-600 text-white rounded-xl hover:bg-gray-700 text-sm font-medium flex items-center"
                           >
-                            <FaCopy className="mr-2" /> Копировать
+                            <FaCopy className="mr-2" /> Көшіру
                           </button>
                           <button
                             onClick={() => openShareModal(meeting)}
                             className="px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 text-sm font-medium flex items-center"
                           >
-                            <FaShare className="mr-2" /> Поделиться
+                            <FaShare className="mr-2" /> Бөлісу
                           </button>
                         </>
                       )}
@@ -1187,13 +1181,13 @@ const DoctorAppointments = () => {
                           onClick={() => window.open(meeting.meetingUrl, '_blank')}
                           className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-sm font-medium flex items-center"
                         >
-                          <FaVideo className="mr-2" /> Открыть запись
+                          <FaVideo className="mr-2" /> Жазбаны ашу
                         </button>
                       )}
 
                       {meeting.status === 'CANCELLED' && (
                         <div className="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium">
-                          Встреча отменена
+                          Кездесу болдырылды
                         </div>
                       )}
                     </div>
@@ -1205,7 +1199,7 @@ const DoctorAppointments = () => {
         </div>
       )}
 
-      {/* МОДАЛЬНОЕ ОКНО СОЗДАНИЯ ПЛАТЕЖА */}
+      {/* ТӨЛЕМ ЖАСАУ МОДАЛЬДЫ ТЕРЕЗЕСІ */}
       {showCreatePaymentModal && selectedAppointmentForPayment && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
@@ -1216,8 +1210,8 @@ const DoctorAppointments = () => {
                     <FaCreditCard className="text-xl" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold">Выставить счет</h2>
-                    <p className="text-sm text-green-100">Для приема пациента</p>
+                    <h2 className="text-xl font-bold">Шот ұсыну</h2>
+                    <p className="text-sm text-green-100">Пациенттің қабылдауы үшін</p>
                   </div>
                 </div>
                 <button
@@ -1235,7 +1229,7 @@ const DoctorAppointments = () => {
             </div>
 
             <div className="p-6">
-              {/* Информация о пациенте */}
+              {/* Пациент туралы ақпарат */}
               <div className="bg-blue-50 rounded-xl p-4 mb-6 border border-blue-100">
                 <div className="flex items-center">
                   <div className="p-2 bg-white rounded-lg mr-3 border border-blue-200">
@@ -1250,9 +1244,9 @@ const DoctorAppointments = () => {
                 </div>
               </div>
 
-              {/* Выбор суммы */}
+              {/* Сома таңдау */}
               <label className="block text-sm font-medium text-gray-700 mb-3">
-                Выберите сумму
+                Соманы таңдаңыз
               </label>
 
               <div className="grid grid-cols-3 gap-2 mb-4">
@@ -1271,7 +1265,7 @@ const DoctorAppointments = () => {
                 ))}
               </div>
 
-              {/* Своя сумма */}
+              {/* Өз сомасы */}
               <div className="mb-4">
                 <div className="flex items-center mb-2">
                   <input
@@ -1290,7 +1284,7 @@ const DoctorAppointments = () => {
                     className="w-4 h-4 text-green-600 rounded focus:ring-green-500 mr-2"
                   />
                   <label htmlFor="customAmount" className="text-sm text-gray-700">
-                    Своя сумма
+                    Өз сомасы
                   </label>
                 </div>
 
@@ -1300,7 +1294,7 @@ const DoctorAppointments = () => {
                       type="text"
                       value={customAmount}
                       onChange={handleCustomAmountChange}
-                      placeholder="Введите сумму"
+                      placeholder="Соманы енгізіңіз"
                       className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-green-500 focus:outline-none"
                       autoFocus
                     />
@@ -1309,24 +1303,24 @@ const DoctorAppointments = () => {
                 )}
               </div>
 
-              {/* Итоговая сумма */}
+              {/* Қорытынды сома */}
               <div className="bg-blue-50 rounded-xl p-4 mb-6 border border-blue-100">
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-700 font-medium">Итого к оплате:</span>
+                  <span className="text-gray-700 font-medium">Төлеуге жататын сома:</span>
                   <span className="text-2xl font-bold text-gray-800">
                     {paymentAmount?.toLocaleString() || 0} ₸
                   </span>
                 </div>
               </div>
 
-              {/* Ошибка */}
+              {/* Қате */}
               {paymentError && (
                 <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-xl text-sm border border-red-200">
                   {paymentError}
                 </div>
               )}
 
-              {/* Кнопки */}
+              {/* Түймелер */}
               <div className="flex gap-3">
                 <button
                   onClick={createPayment}
@@ -1340,12 +1334,12 @@ const DoctorAppointments = () => {
                   {creatingPayment ? (
                     <>
                       <FaSpinner className="animate-spin mr-2" />
-                      Создание...
+                      Жасалуда...
                     </>
                   ) : (
                     <>
                       <FaCreditCard className="mr-2" />
-                      Создать счет
+                      Шот жасау
                     </>
                   )}
                 </button>
@@ -1358,7 +1352,7 @@ const DoctorAppointments = () => {
                   disabled={creatingPayment}
                   className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200"
                 >
-                  Отмена
+                  Болдырмау
                 </button>
               </div>
             </div>
@@ -1366,7 +1360,7 @@ const DoctorAppointments = () => {
         </div>
       )}
 
-      {/* МОДАЛЬНОЕ ОКНО С ССЫЛКОЙ НА ОПЛАТУ */}
+      {/* ТӨЛЕМ СІЛТЕМЕСІ БАР МОДАЛЬДЫ ТЕРЕЗЕ */}
       {showPaymentModal && paymentDetails && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl">
@@ -1377,8 +1371,8 @@ const DoctorAppointments = () => {
                     <FaExternalLinkAlt className="text-xl" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold">Счет создан</h2>
-                    <p className="text-sm text-green-100">Отправьте ссылку пациенту</p>
+                    <h2 className="text-xl font-bold">Шот жасалды</h2>
+                    <p className="text-sm text-green-100">Сілтемені пациентке жіберіңіз</p>
                   </div>
                 </div>
                 <button
@@ -1395,7 +1389,7 @@ const DoctorAppointments = () => {
             </div>
 
             <div className="p-6">
-              {/* Информация о платеже */}
+              {/* Төлем туралы ақпарат */}
               <div className="bg-blue-50 rounded-xl p-4 mb-6 border border-blue-100">
                 <div className="flex items-center mb-3">
                   <div className="p-2 bg-white rounded-lg mr-3 border border-blue-200">
@@ -1407,13 +1401,13 @@ const DoctorAppointments = () => {
                   </div>
                 </div>
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-600">Сумма:</span>
+                  <span className="text-gray-600">Сома:</span>
                   <span className="font-bold text-xl text-gray-800">
                     {paymentDetails.amount?.toLocaleString()} ₸
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-sm mt-2">
-                  <span className="text-gray-600">Статус:</span>
+                  <span className="text-gray-600">Мәртебе:</span>
                   <span className={`px-3 py-1 rounded-lg text-xs font-medium ${
                     paymentDetails.status === 'PENDING' || paymentDetails.status === 'pending' 
                       ? 'bg-yellow-100 text-yellow-800' 
@@ -1422,9 +1416,9 @@ const DoctorAppointments = () => {
                       : 'bg-gray-100 text-gray-800'
                   }`}>
                     {paymentDetails.status === 'PENDING' || paymentDetails.status === 'pending' 
-                      ? 'Ожидает оплаты' 
+                      ? 'Төлем күтілуде' 
                       : paymentDetails.status === 'PAID' || paymentDetails.status === 'paid'
-                      ? 'Оплачено' 
+                      ? 'Төленген' 
                       : paymentDetails.status}
                   </span>
                 </div>
@@ -1433,7 +1427,7 @@ const DoctorAppointments = () => {
               {paymentLink && (
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Ссылка на оплату:
+                    Төлем сілтемесі:
                   </label>
                   <div className="flex">
                     <input
@@ -1449,7 +1443,7 @@ const DoctorAppointments = () => {
                     </button>
                   </div>
                   <p className="text-xs text-gray-500 mt-2">
-                    Отправьте эту ссылку пациенту для оплаты
+                    Бұл сілтемені пациентке төлем жасау үшін жіберіңіз
                   </p>
                 </div>
               )}
@@ -1459,7 +1453,7 @@ const DoctorAppointments = () => {
                   onClick={() => window.open(paymentLink, '_blank')}
                   className="flex-1 bg-green-600 text-white py-3 rounded-xl hover:bg-green-700 flex items-center justify-center"
                 >
-                  <FaExternalLinkAlt className="mr-2" /> Открыть ссылку
+                  <FaExternalLinkAlt className="mr-2" /> Сілтемені ашу
                 </button>
                 <button
                   onClick={() => {
@@ -1469,7 +1463,7 @@ const DoctorAppointments = () => {
                   }}
                   className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl hover:bg-gray-200"
                 >
-                  Закрыть
+                  Жабу
                 </button>
               </div>
             </div>
@@ -1477,7 +1471,7 @@ const DoctorAppointments = () => {
         </div>
       )}
 
-      {/* Модальное окно создания встречи с пациентом */}
+      {/* ПАЦИЕНТПЕН КЕЗДЕСУ ҚҰРУ МОДАЛЬДЫ ТЕРЕЗЕСІ */}
       {showMeetingModal && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl">
@@ -1489,9 +1483,9 @@ const DoctorAppointments = () => {
                   </div>
                   <div>
                     <h2 className="text-xl font-bold text-gray-800">
-                      {sendingInvite ? 'Создание встречи...' : meetingData?.meetingUrl ? 'Встреча создана!' : 'Новая видеовстреча'}
+                      {sendingInvite ? 'Кездесу құрылуда...' : meetingData?.meetingUrl ? 'Кездесу құрылды!' : 'Жаңа видеокездесу'}
                     </h2>
-                    <p className="text-sm text-gray-500">Отправьте приглашение пациенту</p>
+                    <p className="text-sm text-gray-500">Пациентке шақыру жіберіңіз</p>
                   </div>
                 </div>
                 <button
@@ -1522,7 +1516,7 @@ const DoctorAppointments = () => {
                 {selectedAppointment?.patientEmail && (
                   <div className="flex items-center text-gray-700 text-sm">
                     <FaEnvelope className="mr-2 text-gray-400" />
-                    Записанный email: <strong className="ml-1">{selectedAppointment.patientEmail}</strong>
+                    Жазылған email: <strong className="ml-1">{selectedAppointment.patientEmail}</strong>
                   </div>
                 )}
               </div>
@@ -1530,8 +1524,8 @@ const DoctorAppointments = () => {
               {sendingInvite ? (
                 <div className="text-center py-10">
                   <FaSpinner className="animate-spin text-4xl text-purple-600 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-800 mb-2">Создание встречи</h3>
-                  <p className="text-gray-600">Отправляем приглашение...</p>
+                  <h3 className="text-lg font-medium text-gray-800 mb-2">Кездесу құрылуда</h3>
+                  <p className="text-gray-600">Шақыру жіберілуде...</p>
                 </div>
               ) : meetingData?.meetingUrl ? (
                 <div>
@@ -1541,15 +1535,15 @@ const DoctorAppointments = () => {
                         <FaCheck className="text-green-600" />
                       </div>
                       <div>
-                        <h3 className="font-bold text-gray-800 text-lg">Приглашение отправлено!</h3>
-                        <p className="text-gray-600 text-sm">Ссылка направлена пациенту</p>
+                        <h3 className="font-bold text-gray-800 text-lg">Шақыру жіберілді!</h3>
+                        <p className="text-gray-600 text-sm">Сілтеме пациентке жіберілді</p>
                       </div>
                     </div>
                   </div>
 
                   <div className="mb-6">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Ссылка на встречу:
+                      Кездесу сілтемесі:
                     </label>
                     <div className="flex">
                       <input
@@ -1561,7 +1555,7 @@ const DoctorAppointments = () => {
                         onClick={() => copyLink(meetingData.meetingUrl)}
                         className="bg-blue-600 text-white px-5 rounded-r-xl hover:bg-blue-700 flex items-center"
                       >
-                        <FaCopy className="mr-2" /> Копировать
+                        <FaCopy className="mr-2" /> Көшіру
                       </button>
                     </div>
                   </div>
@@ -1571,7 +1565,7 @@ const DoctorAppointments = () => {
                       onClick={() => window.open(meetingData.meetingUrl, '_blank')}
                       className="flex-1 bg-green-600 text-white py-3 rounded-xl hover:bg-green-700 flex items-center justify-center"
                     >
-                      <FaVideo className="mr-2" /> Присоединиться
+                      <FaVideo className="mr-2" /> Қосылу
                     </button>
                     <button
                       onClick={() => {
@@ -1581,7 +1575,7 @@ const DoctorAppointments = () => {
                       }}
                       className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl hover:bg-gray-200"
                     >
-                      Закрыть
+                      Жабу
                     </button>
                   </div>
                 </div>
@@ -1589,7 +1583,7 @@ const DoctorAppointments = () => {
                 <>
                   <div className="mb-6">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Email пациента:
+                      Пациенттің email-і:
                     </label>
                     <input
                       type="email"
@@ -1611,12 +1605,12 @@ const DoctorAppointments = () => {
                     {sendingInvite ? (
                       <>
                         <FaSpinner className="animate-spin mr-2" />
-                        Создание...
+                        Құрылуда...
                       </>
                     ) : (
                       <>
                         <FaPaperPlane className="mr-2" />
-                        Создать встречу и отправить приглашение
+                        Кездесу құру және шақыру жіберу
                       </>
                     )}
                   </button>
@@ -1627,36 +1621,36 @@ const DoctorAppointments = () => {
         </div>
       )}
 
-      {/* Модальное окно — поделиться встречей с коллегой */}
+      {/* КЕЗДЕСУДІ ӘРІПТЕСПЕН БӨЛІСУ МОДАЛЬДЫ ТЕРЕЗЕСІ */}
       {showShareModal && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
             <div className="p-6 border-b">
               <h2 className="text-xl font-bold flex items-center">
                 <FaUserTie className="mr-3 text-indigo-600" />
-                Поделиться встречей
+                Кездесуді бөлісу
               </h2>
               <p className="text-sm text-gray-500 mt-1">
-                Отправить ссылку другому врачу
+                Сілтемені басқа дәрігерге жіберу
               </p>
             </div>
 
             <div className="p-6">
               {doctors.length === 0 ? (
                 <p className="text-center py-8 text-gray-500">
-                  Список врачей не загружен...
+                  Дәрігерлер тізімі жүктелмеді...
                 </p>
               ) : (
                 <>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Выберите коллегу:
+                    Әріптесті таңдаңыз:
                   </label>
                   <select
                     value={selectedDoctorId}
                     onChange={e => setSelectedDoctorId(e.target.value)}
                     className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
-                    <option value="">— выберите врача —</option>
+                    <option value="">— дәрігерді таңдаңыз —</option>
                     {doctors.map(doc => (
                       <option key={doc.id} value={doc.id}>
                         {doc.fullName} {doc.specialty !== '—' ? `(${doc.specialty})` : ''}
@@ -1667,7 +1661,7 @@ const DoctorAppointments = () => {
                   {selectedDoctorId && (
                     <div className="mt-4 p-3 bg-gray-50 rounded-xl text-sm">
                       Email: <strong>
-                        {doctors.find(d => d.id === parseInt(selectedDoctorId))?.email || 'не указан'}
+                        {doctors.find(d => d.id === parseInt(selectedDoctorId))?.email || 'көрсетілмеген'}
                       </strong>
                     </div>
                   )}
@@ -1686,12 +1680,12 @@ const DoctorAppointments = () => {
                   {sharing ? (
                     <>
                       <FaSpinner className="animate-spin mr-2" />
-                      Отправка...
+                      Жіберілуде...
                     </>
                   ) : (
                     <>
                       <FaPaperPlane className="mr-2" />
-                      Отправить ссылку
+                      Сілтемені жіберу
                     </>
                   )}
                 </button>
@@ -1703,7 +1697,7 @@ const DoctorAppointments = () => {
                   }}
                   className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200"
                 >
-                  Отмена
+                  Болдырмау
                 </button>
               </div>
             </div>

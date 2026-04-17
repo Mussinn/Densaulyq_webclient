@@ -28,7 +28,7 @@ const DoctorConsultations = () => {
   const [filter, setFilter] = useState('all');
   const [currentDoctorId, setCurrentDoctorId] = useState(null);
 
-  // Для создания консилиума
+  // Консилиум құру үшін
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [doctors, setDoctors] = useState([]);
   const [selectedDoctorId, setSelectedDoctorId] = useState('');
@@ -40,7 +40,7 @@ const DoctorConsultations = () => {
   const [creating, setCreating] = useState(false);
   const [createdMeeting, setCreatedMeeting] = useState(null);
 
-  // Для шаринга консилиума с другим доктором
+  // Консилиумды басқа дәрігермен бөлісу үшін
   const [showShareModal, setShowShareModal] = useState(false);
   const [selectedConsultationToShare, setSelectedConsultationToShare] = useState(null);
   const [selectedShareDoctorId, setSelectedShareDoctorId] = useState('');
@@ -49,31 +49,29 @@ const DoctorConsultations = () => {
   const { token } = useSelector((state) => state.token);
 
   // ────────────────────────────────────────────────
-  // Загрузка данных
+  // Деректерді жүктеу
   // ────────────────────────────────────────────────
   const fetchConsultations = async () => {
     try {
       setLoading(true);
       
-      // ЗАМЕНА: Используем /api/v1/doctor/me вместо /api/v1/users/me
       const doctorRes = await api.get('/api/v1/doctor/me', {
         headers: { Authorization: `Bearer ${token}` },
       });
       
       const doctorData = doctorRes.data;
-      console.log('Текущий доктор:', doctorData);
+      console.log('Ағымдағы дәрігер:', doctorData);
       
-      // Получаем ID доктора из ответа
       const doctorId = doctorData?.doctorId || doctorData?.userId;
       setCurrentDoctorId(doctorId);
 
       if (doctorId) {
-        // Получаем консилиумы где текущий доктор - отправитель (организатор)
+        // Ағымдағы дәрігер жіберуші (ұйымдастырушы) болып табылатын консилиумдар
         const senderResponse = await api.get(`/api/v1/meeting-consilium/doctor/${doctorId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         
-        // Получаем консилиумы где текущий доктор - получатель (приглашённый)
+        // Ағымдағы дәрігер алушы (шақырылған) болып табылатын консилиумдар
         const receiverResponse = await api.get(`/api/v1/meeting-consilium/receiver-doctor/${doctorId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -81,31 +79,31 @@ const DoctorConsultations = () => {
         const senderMeetings = senderResponse.data || [];
         const receiverMeetings = receiverResponse.data || [];
 
-        // Обогащаем данные о консилиумах где доктор - организатор
+        // Дәрігер ұйымдастырушы болып табылатын консилиумдарды байыту
         const enrichedSenderConsultations = senderMeetings.map(meeting => ({
           ...meeting,
           currentUserRole: 'organizer',
           colleagueId: meeting.receiverDoctorId,
           colleagueEmail: meeting.receiverDoctorEmail,
-          colleagueName: 'Коллега'
+          colleagueName: 'Әріптес'
         }));
 
-        // Обогащаем данные о консилиумах где доктор - приглашённый
+        // Дәрігер шақырылған болып табылатын консилиумдарды байыту
         const enrichedReceiverConsultations = receiverMeetings.map(meeting => ({
           ...meeting,
           currentUserRole: 'invited',
           colleagueId: meeting.senderDoctorId,
           colleagueEmail: meeting.senderDoctorEmail,
-          colleagueName: 'Организатор'
+          colleagueName: 'Ұйымдастырушы'
         }));
 
-        // Объединяем оба списка
+        // Екі тізімді біріктіру
         const allConsultations = [
           ...enrichedSenderConsultations,
           ...enrichedReceiverConsultations
         ];
         
-        // Сортируем по дате (новые сначала)
+        // Күні бойынша сұрыптау (жаңалары бірінші)
         allConsultations.sort((a, b) => 
           new Date(b.scheduledTime || b.createdAt) - new Date(a.scheduledTime || a.createdAt)
         );
@@ -113,7 +111,7 @@ const DoctorConsultations = () => {
         setConsultations(allConsultations);
       }
     } catch (err) {
-      console.error('Ошибка загрузки консилиумов:', err);
+      console.error('Консилиумдарды жүктеу қатесі:', err);
       setConsultations([]);
     } finally {
       setLoading(false);
@@ -126,20 +124,19 @@ const DoctorConsultations = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      // ЗАМЕНА: Используем /api/v1/doctor/me вместо /api/v1/users/me
       const doctorRes = await api.get('/api/v1/doctor/me', {
         headers: { Authorization: `Bearer ${token}` },
       });
       const currentDoctorId = doctorRes.data?.doctorId || doctorRes.data?.userId;
 
-      // Фильтруем текущего доктора из списка
+      // Ағымдағы дәрігерді тізімнен сүзу
       const doctorsData = response.data
         .filter(doctor => doctor.doctorId !== currentDoctorId)
         .map(doctor => {
           const user = doctor.user || {};
           return {
             id: doctor.doctorId,
-            fullName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Доктор без имени',
+            fullName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Дәрігер',
             email: user.email || '',
             specialty: doctor.specialty || '—',
             user: user,
@@ -148,12 +145,12 @@ const DoctorConsultations = () => {
 
       setDoctors(doctorsData);
     } catch (err) {
-      console.error('Не удалось загрузить список врачей:', err);
+      console.error('Дәрігерлер тізімін жүктеу мүмкін болмады:', err);
     }
   };
 
   // ────────────────────────────────────────────────
-  // Создание консилиума
+  // Консилиум құру
   // ────────────────────────────────────────────────
   const openCreateModal = () => {
     setShowCreateModal(true);
@@ -179,39 +176,38 @@ const DoctorConsultations = () => {
   };
 
   const createConsultation = async () => {
-    // Валидация
+    // Тексеру
     if (!selectedDoctorId) {
-      alert('Выберите коллегу для консилиума');
+      alert('Консилиум үшін әріптесті таңдаңыз');
       return;
     }
 
     if (!topic.trim()) {
-      alert('Введите тему консилиума');
+      alert('Консилиум тақырыбын енгізіңіз');
       return;
     }
 
     if (!inviteEmail.trim()) {
-      alert('Email коллеги не указан');
+      alert('Әріптестің email-і көрсетілмеген');
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(inviteEmail.trim())) {
-      alert('Введите корректный email адрес');
+      alert('Дұрыс email мекенжайын енгізіңіз');
       return;
     }
 
     setCreating(true);
 
     try {
-      // ЗАМЕНА: Используем /api/v1/doctor/me вместо /api/v1/users/me
       const doctorRes = await api.get('/api/v1/doctor/me', {
         headers: { Authorization: `Bearer ${token}` },
       });
       const doctorData = doctorRes.data;
       const currentDoctorId = doctorData?.doctorId || doctorData?.userId;
 
-      // Формируем дату и время
+      // Күн мен уақытты қалыптастыру
       let scheduledDateTime;
       if (scheduledDate && scheduledTime) {
         scheduledDateTime = `${scheduledDate}T${scheduledTime}:00`;
@@ -221,18 +217,17 @@ const DoctorConsultations = () => {
         scheduledDateTime = now.toISOString().slice(0, 19);
       }
 
-      // Создаём встречу с правильными полями для бэкенда
       const requestData = {
-        senderDoctorId: Number(currentDoctorId), // Текущий доктор - отправитель
-        receiverDoctorId: Number(selectedDoctorId), // Приглашённый доктор - получатель
+        senderDoctorId: Number(currentDoctorId),
+        receiverDoctorId: Number(selectedDoctorId),
         topic: topic.trim(),
-        description: description.trim() || 'Консилиум врачей',
+        description: description.trim() || 'Дәрігерлер консилиумы',
         scheduledTime: scheduledDateTime,
         durationMinutes: 60,
-        receiverDoctorEmail: inviteEmail.trim(), // Email получателя
+        receiverDoctorEmail: inviteEmail.trim(),
       };
 
-      console.log('Отправка запроса на создание консилиума:', requestData);
+      console.log('Консилиум құру сұрауы:', requestData);
 
       const response = await api.post('/api/v1/meeting-consilium', requestData, {
         headers: {
@@ -242,18 +237,18 @@ const DoctorConsultations = () => {
       });
 
       const meeting = response.data;
-      console.log('Консилиум создан:', meeting);
+      console.log('Консилиум құрылды:', meeting);
 
       setCreatedMeeting({
         meetingUrl: meeting.meetingUrl,
         roomId: meeting.roomId,
-        message: 'Консилиум создан и приглашение отправлено',
+        message: 'Консилиум құрылды және шақыру жіберілді',
         id: meeting.id
       });
 
       await fetchConsultations();
 
-      // Очистка формы
+      // Форманы тазалау
       setSelectedDoctorId('');
       setTopic('');
       setDescription('');
@@ -261,16 +256,16 @@ const DoctorConsultations = () => {
       setScheduledTime('');
 
     } catch (err) {
-      console.error('Ошибка создания консилиума:', err);
-      console.error('Детали ошибки:', err.response?.data);
-      alert(err.response?.data?.message || 'Не удалось создать консилиум');
+      console.error('Консилиум құру қатесі:', err);
+      console.error('Қате мәліметтері:', err.response?.data);
+      alert(err.response?.data?.message || 'Консилиум құру мүмкін болмады');
     } finally {
       setCreating(false);
     }
   };
 
   // ────────────────────────────────────────────────
-  // Поделиться консилиумом
+  // Консилиуммен бөлісу
   // ────────────────────────────────────────────────
   const openShareModal = (consultation) => {
     setSelectedConsultationToShare(consultation);
@@ -280,18 +275,18 @@ const DoctorConsultations = () => {
 
   const shareConsultation = async () => {
     if (!selectedShareDoctorId) {
-      alert('Выберите врача');
+      alert('Дәрігерді таңдаңыз');
       return;
     }
 
     const doctor = doctors.find(d => d.id === parseInt(selectedShareDoctorId));
     if (!doctor?.email) {
-      alert('У выбранного врача не указан email');
+      alert('Таңдалған дәрігердің email-і көрсетілмеген');
       return;
     }
 
     if (!selectedConsultationToShare?.meetingUrl) {
-      alert('Нет ссылки на консилиум');
+      alert('Консилиум сілтемесі жоқ');
       return;
     }
 
@@ -308,14 +303,14 @@ const DoctorConsultations = () => {
         },
       });
 
-      alert(`Ссылка успешно отправлена на ${doctor.fullName} (${doctor.email})`);
+      alert(`Сілтеме ${doctor.fullName} (${doctor.email}) мекенжайына сәтті жіберілді`);
       setShowShareModal(false);
       setSelectedShareDoctorId('');
       setSelectedConsultationToShare(null);
     } catch (err) {
-      console.error('Ошибка отправки ссылки:', err);
-      const errorMessage = err.response?.data?.message || err.message || 'Неизвестная ошибка';
-      alert(`Не удалось отправить ссылку\n${errorMessage}`);
+      console.error('Сілтеме жіберу қатесі:', err);
+      const errorMessage = err.response?.data?.message || err.message || 'Белгісіз қате';
+      alert(`Сілтеме жіберу мүмкін болмады\n${errorMessage}`);
     } finally {
       setSharing(false);
     }
@@ -324,7 +319,7 @@ const DoctorConsultations = () => {
   const copyLink = (url) => {
     if (url) {
       navigator.clipboard.writeText(url);
-      alert('Ссылка скопирована в буфер обмена');
+      alert('Сілтеме алмасу буферіне көшірілді');
     }
   };
 
@@ -337,20 +332,20 @@ const DoctorConsultations = () => {
       setConsultations(prev => prev.map(m =>
         m.id === meetingId ? { ...m, status } : m
       ));
-      alert(`Статус консилиума изменён: ${status}`);
+      alert(`Консилиум мәртебесі өзгертілді: ${status}`);
     } catch (err) {
-      console.error('Ошибка изменения статуса:', err);
-      alert('Ошибка изменения статуса');
+      console.error('Мәртебені өзгерту қатесі:', err);
+      alert('Мәртебені өзгерту қатесі');
     }
   };
 
   // ────────────────────────────────────────────────
-  // Вспомогательные функции
+  // Көмекші функциялар
   // ────────────────────────────────────────────────
   const formatDateTime = (dateString) => {
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString('ru-RU', {
+      return date.toLocaleDateString('kk-KZ', {
         day: 'numeric',
         month: 'short',
         year: 'numeric',
@@ -364,10 +359,10 @@ const DoctorConsultations = () => {
 
   const getStatusText = (status) => {
     switch (status) {
-      case 'SCHEDULED': return 'Запланирован';
-      case 'ACTIVE': return 'Активен';
-      case 'COMPLETED': return 'Завершён';
-      case 'CANCELLED': return 'Отменён';
+      case 'SCHEDULED': return 'Жоспарланған';
+      case 'ACTIVE': return 'Белсенді';
+      case 'COMPLETED': return 'Аяқталған';
+      case 'CANCELLED': return 'Болдырылмаған';
       default: return status || '—';
     }
   };
@@ -383,7 +378,7 @@ const DoctorConsultations = () => {
   };
 
   // ────────────────────────────────────────────────
-  // Эффекты
+  // Эффекттер
   // ────────────────────────────────────────────────
   useEffect(() => {
     if (token) {
@@ -404,15 +399,15 @@ const DoctorConsultations = () => {
   // ────────────────────────────────────────────────
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
-      {/* Заголовок */}
+      {/* Тақырып */}
       <div className="mb-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2 flex items-center">
               <FaUsers className="mr-3 text-indigo-600" />
-              Консилиумы врачей
+              Дәрігерлер консилиумы
             </h1>
-            <p className="text-gray-600">Организация совместных консультаций с коллегами</p>
+            <p className="text-gray-600">Әріптестермен бірлескен кеңестерді ұйымдастыру</p>
           </div>
           <div className="flex gap-3 mt-4 md:mt-0">
             <button
@@ -423,11 +418,11 @@ const DoctorConsultations = () => {
               {loading ? (
                 <>
                   <FaSpinner className="animate-spin mr-2" />
-                  Загрузка...
+                  Жүктелуде...
                 </>
               ) : (
                 <>
-                  <FaCalendar className="mr-2" /> Обновить
+                  <FaCalendar className="mr-2" /> Жаңарту
                 </>
               )}
             </button>
@@ -435,43 +430,43 @@ const DoctorConsultations = () => {
               onClick={openCreateModal}
               className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-xl hover:from-indigo-700 hover:to-indigo-800 transition-all duration-200 flex items-center shadow-md hover:shadow-lg"
             >
-              <FaUserTie className="mr-2" /> Создать консилиум
+              <FaUserTie className="mr-2" /> Консилиум құру
             </button>
           </div>
         </div>
 
-        {/* Фильтры */}
+        {/* Сүзгілер */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setFilter('all')}
               className={`px-4 py-2.5 rounded-xl flex items-center transition-all ${filter === 'all' ? 'bg-indigo-600 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}
             >
-              <FaCalendar className="mr-2" /> Все консилиумы
+              <FaCalendar className="mr-2" /> Барлық консилиумдар
             </button>
             <button
               onClick={() => setFilter('active')}
               className={`px-4 py-2.5 rounded-xl flex items-center transition-all ${filter === 'active' ? 'bg-green-600 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}
             >
-              <FaCheckCircle className="mr-2" /> Активные
+              <FaCheckCircle className="mr-2" /> Белсенді
             </button>
             <button
               onClick={() => setFilter('completed')}
               className={`px-4 py-2.5 rounded-xl flex items-center transition-all ${filter === 'completed' ? 'bg-gray-600 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}
             >
-              <FaCheck className="mr-2" /> Завершённые
+              <FaCheck className="mr-2" /> Аяқталған
             </button>
             <button
               onClick={() => setFilter('cancelled')}
               className={`px-4 py-2.5 rounded-xl flex items-center transition-all ${filter === 'cancelled' ? 'bg-red-600 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}
             >
-              <FaTimes className="mr-2" /> Отменённые
+              <FaTimes className="mr-2" /> Болдырылмаған
             </button>
           </div>
         </div>
       </div>
 
-      {/* Список консилиумов */}
+      {/* Консилиумдар тізімі */}
       <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
         <div className="p-6 border-b border-gray-100">
           <div className="flex items-center justify-between">
@@ -480,12 +475,12 @@ const DoctorConsultations = () => {
                 <FaStethoscope className="text-xl text-indigo-600" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-gray-800">Мои консилиумы</h2>
-                <p className="text-sm text-gray-500">Запланированные встречи с коллегами</p>
+                <h2 className="text-xl font-bold text-gray-800">Менің консилиумдарым</h2>
+                <p className="text-sm text-gray-500">Әріптестермен жоспарланған кездесулер</p>
               </div>
             </div>
             <span className="bg-indigo-100 text-indigo-800 text-sm font-medium px-3 py-1 rounded-full">
-              {filteredConsultations.length} встреч
+              {filteredConsultations.length} кездесу
             </span>
           </div>
         </div>
@@ -494,18 +489,18 @@ const DoctorConsultations = () => {
           {loading ? (
             <div className="py-12 text-center">
               <FaSpinner className="animate-spin mx-auto text-3xl text-indigo-600 mb-4" />
-              <p className="text-gray-600">Загрузка консилиумов...</p>
+              <p className="text-gray-600">Консилиумдар жүктелуде...</p>
             </div>
           ) : filteredConsultations.length === 0 ? (
             <div className="py-12 text-center">
               <FaUsers className="text-4xl mx-auto text-gray-400 mb-3" />
-              <h3 className="text-lg font-medium text-gray-700 mb-2">Нет консилиумов</h3>
-              <p className="text-gray-500 mb-4">Создайте первую встречу с коллегой</p>
+              <h3 className="text-lg font-medium text-gray-700 mb-2">Консилиумдар жоқ</h3>
+              <p className="text-gray-500 mb-4">Әріптеспен бірінші кездесуді құрыңыз</p>
               <button
                 onClick={openCreateModal}
                 className="px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 inline-flex items-center"
               >
-                <FaUserTie className="mr-2" /> Создать консилиум
+                <FaUserTie className="mr-2" /> Консилиум құру
               </button>
             </div>
           ) : (
@@ -523,21 +518,21 @@ const DoctorConsultations = () => {
                             {consultation.topic || 'Консилиум'}
                           </h3>
                           
-                          {/* Показываем роль пользователя и информацию о коллеге */}
+                          {/* Қолданушының рөлін және әріптес туралы ақпаратты көрсету */}
                           <div className="flex items-center gap-4 text-sm mb-2">
                             <span className={`px-2.5 py-1 rounded-lg font-medium ${
                               consultation.currentUserRole === 'organizer' 
                                 ? 'bg-purple-100 text-purple-700 border border-purple-200' 
                                 : 'bg-blue-100 text-blue-700 border border-blue-200'
                             }`}>
-                              {consultation.currentUserRole === 'organizer' ? '👤 Вы — организатор' : '✉️ Вы — приглашенный'}
+                              {consultation.currentUserRole === 'organizer' ? '👤 Сіз — ұйымдастырушы' : '✉️ Сіз — шақырылған'}
                             </span>
                           </div>
 
                           {consultation.colleagueEmail && (
                             <p className="text-gray-600 text-sm flex items-center">
                               <FaEnvelope className="mr-1.5 text-gray-400" size={12} />
-                              {consultation.currentUserRole === 'organizer' ? 'Приглашен' : 'Организатор'}: {consultation.colleagueName} ({consultation.colleagueEmail})
+                              {consultation.currentUserRole === 'organizer' ? 'Шақырылған' : 'Ұйымдастырушы'}: {consultation.colleagueName} ({consultation.colleagueEmail})
                             </p>
                           )}
                         </div>
@@ -561,7 +556,7 @@ const DoctorConsultations = () => {
                                 onClick={() => updateConsultationStatus(consultation.id, 'ACTIVE')}
                                 className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 text-sm font-medium"
                               >
-                                <FaPlay className="mr-2 inline" /> Начать
+                                <FaPlay className="mr-2 inline" /> Бастау
                               </button>
                             )}
                             {consultation.meetingUrl && (
@@ -569,7 +564,7 @@ const DoctorConsultations = () => {
                                 onClick={() => window.open(consultation.meetingUrl, '_blank')}
                                 className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-sm font-medium"
                               >
-                                <FaVideo className="mr-2 inline" /> Присоединиться
+                                <FaVideo className="mr-2 inline" /> Қосылу
                               </button>
                             )}
                             {consultation.currentUserRole === 'organizer' && (
@@ -577,7 +572,7 @@ const DoctorConsultations = () => {
                                 onClick={() => updateConsultationStatus(consultation.id, 'CANCELLED')}
                                 className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 text-sm font-medium"
                               >
-                                <FaTimes className="mr-2 inline" /> Отменить
+                                <FaTimes className="mr-2 inline" /> Болдырмау
                               </button>
                             )}
                           </>
@@ -590,26 +585,26 @@ const DoctorConsultations = () => {
                                 onClick={() => updateConsultationStatus(consultation.id, 'COMPLETED')}
                                 className="px-4 py-2 bg-gray-700 text-white rounded-xl hover:bg-gray-800 text-sm font-medium"
                               >
-                                <FaStop className="mr-2 inline" /> Завершить
+                                <FaStop className="mr-2 inline" /> Аяқтау
                               </button>
                             )}
                             <button
                               onClick={() => window.open(consultation.meetingUrl, '_blank')}
                               className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 text-sm font-medium"
                             >
-                              <FaVideo className="mr-2 inline" /> Присоединиться
+                              <FaVideo className="mr-2 inline" /> Қосылу
                             </button>
                             <button
                               onClick={() => copyLink(consultation.meetingUrl)}
                               className="px-4 py-2 bg-gray-600 text-white rounded-xl hover:bg-gray-700 text-sm font-medium"
                             >
-                              <FaCopy className="mr-2 inline" /> Копировать
+                              <FaCopy className="mr-2 inline" /> Көшіру
                             </button>
                             <button
                               onClick={() => openShareModal(consultation)}
                               className="px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 text-sm font-medium"
                             >
-                              <FaShare className="mr-2 inline" /> Поделиться
+                              <FaShare className="mr-2 inline" /> Бөлісу
                             </button>
                           </>
                         )}
@@ -619,13 +614,13 @@ const DoctorConsultations = () => {
                             onClick={() => window.open(consultation.meetingUrl, '_blank')}
                             className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-sm font-medium"
                           >
-                            <FaVideo className="mr-2 inline" /> Открыть запись
+                            <FaVideo className="mr-2 inline" /> Жазбаны ашу
                           </button>
                         )}
 
                         {consultation.status === 'CANCELLED' && (
                           <div className="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium">
-                            Консилиум отменён
+                            Консилиум болдырылды
                           </div>
                         )}
                       </div>
@@ -638,7 +633,7 @@ const DoctorConsultations = () => {
         </div>
       </div>
 
-      {/* Модальное окно создания консилиума */}
+      {/* Консилиум құру модальды терезесі */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -650,9 +645,9 @@ const DoctorConsultations = () => {
                   </div>
                   <div>
                     <h2 className="text-xl font-bold text-gray-800">
-                      {creating ? 'Создание консилиума...' : createdMeeting ? 'Консилиум создан!' : 'Новый консилиум'}
+                      {creating ? 'Консилиум құрылуда...' : createdMeeting ? 'Консилиум құрылды!' : 'Жаңа консилиум'}
                     </h2>
-                    <p className="text-sm text-gray-500">Организация встречи с коллегой</p>
+                    <p className="text-sm text-gray-500">Әріптеспен кездесуді ұйымдастыру</p>
                   </div>
                 </div>
                 <button
@@ -672,8 +667,8 @@ const DoctorConsultations = () => {
               {creating ? (
                 <div className="text-center py-10">
                   <FaSpinner className="animate-spin text-4xl text-indigo-600 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-800 mb-2">Создание консилиума</h3>
-                  <p className="text-gray-600">Отправляем приглашение коллеге...</p>
+                  <h3 className="text-lg font-medium text-gray-800 mb-2">Консилиум құрылуда</h3>
+                  <p className="text-gray-600">Әріптеске шақыру жіберілуде...</p>
                 </div>
               ) : createdMeeting ? (
                 <div>
@@ -683,15 +678,15 @@ const DoctorConsultations = () => {
                         <FaCheck className="text-green-600" />
                       </div>
                       <div>
-                        <h3 className="font-bold text-gray-800 text-lg">Консилиум создан!</h3>
-                        <p className="text-gray-600 text-sm">Приглашение отправлено коллеге</p>
+                        <h3 className="font-bold text-gray-800 text-lg">Консилиум құрылды!</h3>
+                        <p className="text-gray-600 text-sm">Шақыру әріптеске жіберілді</p>
                       </div>
                     </div>
                   </div>
 
                   <div className="mb-6">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Ссылка на консилиум:
+                      Консилиум сілтемесі:
                     </label>
                     <div className="flex">
                       <input
@@ -703,7 +698,7 @@ const DoctorConsultations = () => {
                         onClick={() => copyLink(createdMeeting.meetingUrl)}
                         className="bg-blue-600 text-white px-5 rounded-r-xl hover:bg-blue-700 flex items-center"
                       >
-                        <FaCopy className="mr-2" /> Копировать
+                        <FaCopy className="mr-2" /> Көшіру
                       </button>
                     </div>
                   </div>
@@ -713,7 +708,7 @@ const DoctorConsultations = () => {
                       onClick={() => window.open(createdMeeting.meetingUrl, '_blank')}
                       className="flex-1 bg-green-600 text-white py-3 rounded-xl hover:bg-green-700 flex items-center justify-center"
                     >
-                      <FaVideo className="mr-2" /> Присоединиться
+                      <FaVideo className="mr-2" /> Қосылу
                     </button>
                     <button
                       onClick={() => {
@@ -722,23 +717,23 @@ const DoctorConsultations = () => {
                       }}
                       className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl hover:bg-gray-200"
                     >
-                      Закрыть
+                      Жабу
                     </button>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-5">
-                  {/* Выбор коллеги */}
+                  {/* Әріптесті таңдау */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Выберите коллегу: *
+                      Әріптесті таңдаңыз: *
                     </label>
                     <select
                       value={selectedDoctorId}
                       onChange={handleDoctorSelection}
                       className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500"
                     >
-                      <option value="">— выберите врача —</option>
+                      <option value="">— дәрігерді таңдаңыз —</option>
                       {doctors.map(doc => (
                         <option key={doc.id} value={doc.id}>
                           {doc.fullName} {doc.specialty !== '—' ? `(${doc.specialty})` : ''}
@@ -747,48 +742,48 @@ const DoctorConsultations = () => {
                     </select>
                   </div>
 
-                  {/* Email коллеги */}
+                  {/* Әріптестің email-і */}
                   {selectedDoctorId && (
                     <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-200">
                       <p className="text-sm text-gray-700">
-                        <strong>Email коллеги:</strong> {inviteEmail || 'не указан'}
+                        <strong>Әріптестің email-і:</strong> {inviteEmail || 'көрсетілмеген'}
                       </p>
                     </div>
                   )}
 
-                  {/* Тема */}
+                  {/* Тақырып */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Тема консилиума: *
+                      Консилиум тақырыбы: *
                     </label>
                     <input
                       type="text"
                       value={topic}
                       onChange={e => setTopic(e.target.value)}
-                      placeholder="Например: Обсуждение сложного случая пациента"
+                      placeholder="Мысалы: Пациенттің күрделі жағдайын талқылау"
                       className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500"
                     />
                   </div>
 
-                  {/* Описание */}
+                  {/* Сипаттама */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Описание (опционально):
+                      Сипаттама (міндетті емес):
                     </label>
                     <textarea
                       value={description}
                       onChange={e => setDescription(e.target.value)}
-                      placeholder="Дополнительная информация о консилиуме..."
+                      placeholder="Консилиум туралы қосымша ақпарат..."
                       rows={3}
                       className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500"
                     />
                   </div>
 
-                  {/* Дата и время */}
+                  {/* Күн мен уақыт */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Дата (опционально):
+                        Күні (міндетті емес):
                       </label>
                       <input
                         type="date"
@@ -799,7 +794,7 @@ const DoctorConsultations = () => {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Время (опционально):
+                        Уақыты (міндетті емес):
                       </label>
                       <input
                         type="time"
@@ -810,7 +805,7 @@ const DoctorConsultations = () => {
                     </div>
                   </div>
 
-                  {/* Кнопка создания */}
+                  {/* Құру түймесі */}
                   <button
                     onClick={createConsultation}
                     disabled={creating || !selectedDoctorId || !topic.trim()}
@@ -823,12 +818,12 @@ const DoctorConsultations = () => {
                     {creating ? (
                       <>
                         <FaSpinner className="animate-spin mr-2" />
-                        Создание...
+                        Құрылуда...
                       </>
                     ) : (
                       <>
                         <FaPaperPlane className="mr-2" />
-                        Создать консилиум и отправить приглашение
+                        Консилиум құру және шақыру жіберу
                       </>
                     )}
                   </button>
@@ -839,36 +834,36 @@ const DoctorConsultations = () => {
         </div>
       )}
 
-      {/* Модальное окно поделиться консилиумом */}
+      {/* Консилиуммен бөлісу модальды терезесі */}
       {showShareModal && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
             <div className="p-6 border-b">
               <h2 className="text-xl font-bold flex items-center">
                 <FaUserTie className="mr-3 text-indigo-600" />
-                Поделиться консилиумом
+                Консилиуммен бөлісу
               </h2>
               <p className="text-sm text-gray-500 mt-1">
-                Отправить ссылку другому коллеге
+                Сілтемені басқа әріптеске жіберу
               </p>
             </div>
 
             <div className="p-6">
               {doctors.length === 0 ? (
                 <p className="text-center py-8 text-gray-500">
-                  Список врачей не загружен...
+                  Дәрігерлер тізімі жүктелмеді...
                 </p>
               ) : (
                 <>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Выберите коллегу:
+                    Әріптесті таңдаңыз:
                   </label>
                   <select
                     value={selectedShareDoctorId}
                     onChange={e => setSelectedShareDoctorId(e.target.value)}
                     className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
-                    <option value="">— выберите врача —</option>
+                    <option value="">— дәрігерді таңдаңыз —</option>
                     {doctors.map(doc => (
                       <option key={doc.id} value={doc.id}>
                         {doc.fullName} {doc.specialty !== '—' ? `(${doc.specialty})` : ''}
@@ -879,7 +874,7 @@ const DoctorConsultations = () => {
                   {selectedShareDoctorId && (
                     <div className="mt-4 p-3 bg-gray-50 rounded-xl text-sm">
                       Email: <strong>
-                        {doctors.find(d => d.id === parseInt(selectedShareDoctorId))?.email || 'не указан'}
+                        {doctors.find(d => d.id === parseInt(selectedShareDoctorId))?.email || 'көрсетілмеген'}
                       </strong>
                     </div>
                   )}
@@ -899,12 +894,12 @@ const DoctorConsultations = () => {
                   {sharing ? (
                     <>
                       <FaSpinner className="animate-spin mr-2" />
-                      Отправка...
+                      Жіберілуде...
                     </>
                   ) : (
                     <>
                       <FaPaperPlane className="mr-2" />
-                      Отправить ссылку
+                      Сілтемені жіберу
                     </>
                   )}
                 </button>
@@ -916,7 +911,7 @@ const DoctorConsultations = () => {
                   }}
                   className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200"
                 >
-                  Отмена
+                  Болдырмау
                 </button>
               </div>
             </div>

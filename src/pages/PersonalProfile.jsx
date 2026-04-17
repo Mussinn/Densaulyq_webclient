@@ -22,7 +22,11 @@ import {
   FaStethoscope,
   FaFlask,
   FaFileAlt,
-  FaImage
+  FaImage,
+  FaLock,
+  FaLockOpen,
+  FaDiagnoses,
+  FaEye
 } from 'react-icons/fa';
 import { GiHealthPotion, GiMedicalPack } from 'react-icons/gi';
 import { MdHealthAndSafety, MdAccessTimeFilled, MdEmail, MdLocationOn } from 'react-icons/md';
@@ -44,6 +48,14 @@ function PersonalProfile() {
   const [appointmentDetails, setAppointmentDetails] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  
+  // Для модального окна расшифровки диагноза
+  const [showDecryptModal, setShowDecryptModal] = useState(false);
+  const [selectedDiagnosis, setSelectedDiagnosis] = useState(null);
+  const [decryptionKey, setDecryptionKey] = useState('');
+  const [decryptedDiagnosis, setDecryptedDiagnosis] = useState('');
+  const [decrypting, setDecrypting] = useState(false);
+  const [decryptError, setDecryptError] = useState('');
   
   const [stats, setStats] = useState({
     totalAppointments: 0,
@@ -81,7 +93,6 @@ function PersonalProfile() {
       const appointmentsData = response.data || [];
       setAppointments(appointmentsData);
       
-      // Рассчитываем статистику
       const now = new Date();
       const completed = appointmentsData.filter(a => 
         a.status === 'COMPLETED' || a.status === 'completed'
@@ -114,15 +125,14 @@ function PersonalProfile() {
     }
   };
 
-  // Загрузка медицинской истории пациента
-  const fetchMedicalHistory = async (patientId) => {
+  const fetchMedicalHistory = async (userId) => {
     try {
       setLoadingMedicalHistory(true);
-      const response = await api.get(`/api/v1/prescription/${patientId}/patient`, {
+      const response = await api.get(`/api/v1/diagnosis/${userId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       
-      console.log('Медициналық тарих:', response.data);
+      console.log('Медициналық тарих (диагноздар):', response.data);
       setMedicalHistory(response.data || []);
       
     } catch (error) {
@@ -133,7 +143,6 @@ function PersonalProfile() {
     }
   };
 
-  // Загрузка результатов лабораторных анализов
   const fetchLabResults = async (patientId) => {
     try {
       setLoadingLabResults(true);
@@ -152,7 +161,6 @@ function PersonalProfile() {
     }
   };
 
-  // Загрузка деталей кездесу (рецепты, диагнозы)
   const fetchAppointmentDetails = async (appointmentId) => {
     try {
       setLoadingDetails(true);
@@ -171,25 +179,115 @@ function PersonalProfile() {
     }
   };
 
-  // Открытие модального окна с деталями
   const handleShowDetails = async (appointment) => {
     setSelectedAppointment(appointment);
     setShowDetailsModal(true);
     await fetchAppointmentDetails(appointment.appointmentId);
   };
 
+  // Функция для скачивания файлов (как в MedicalTestsPage)
+  const handleDownloadFile = async (url, filename) => {
+    if (!url) {
+      alert('Файл URL-і табылмады');
+      return;
+    }
+    
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Файлды жүктеу кезінде қате');
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.setAttribute('download', filename || 'file');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+      
+    } catch (err) {
+      console.error('Файлды жүктеу қатесі:', err);
+      alert('Файлды жүктеу қатесі. Файлды жаңа қойында ашып көріңіз.');
+      window.open(url, '_blank');
+    }
+  };
+
+  // Функция для просмотра изображения
+  const handleViewImage = (url) => {
+    if (!url) return;
+    window.open(url, '_blank');
+  };
+
+  // Открытие модального окна расшифровки диагноза
+  const handleDecryptDiagnosis = (diagnosis) => {
+    setSelectedDiagnosis(diagnosis);
+    setDecryptionKey('');
+    setDecryptedDiagnosis('');
+    setDecryptError('');
+    setShowDecryptModal(true);
+  };
+
+  // Функция расшифровки диагноза
+  const handleDecryptSubmit = async () => {
+    if (!decryptionKey.trim()) {
+      setDecryptError('Шифрлау кілтін енгізіңіз');
+      return;
+    }
+
+    setDecrypting(true);
+    setDecryptError('');
+
+    try {
+      // Отправляем запрос на расшифровку
+      const response = await api.post('/api/v1/diagnosis/decrypt', {
+        diagnosisId: selectedDiagnosis.diagnosisId,
+        encryptionKey: decryptionKey
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      setDecryptedDiagnosis(response.data.decryptedText || response.data.diagnosis);
+      
+    } catch (err) {
+      console.error('Диагнозды шешу қатесі:', err);
+      setDecryptError(err.response?.data?.message || 'Диагнозды шешу мүмкін болмады. Кілт дұрыс емес.');
+    } finally {
+      setDecrypting(false);
+    }
+  };
+
+  // Закрытие модального окна расшифровки
+  const closeDecryptModal = () => {
+    setShowDecryptModal(false);
+    setSelectedDiagnosis(null);
+    setDecryptionKey('');
+    setDecryptedDiagnosis('');
+    setDecryptError('');
+    setDecrypting(false);
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
-      // 1. Получаем информацию о пациенте
       const patientData = await fetchPatientInfo();
       
       if (patientData && patientData.patientId) {
-        // 2. Получаем записи пациента
         await fetchAppointments(patientData.patientId);
-        // 3. Получаем медицинскую историю
-        await fetchMedicalHistory(patientData.patientId);
-        // 4. Получаем результаты лабораторных анализов
+        
+        if (patientData.user && patientData.user.userId) {
+          await fetchMedicalHistory(patientData.user.userId);
+        } else {
+          console.error('userId табылмады');
+        }
+        
         await fetchLabResults(patientData.patientId);
       } else {
         console.error('Пациент ID табылмады');
@@ -272,47 +370,10 @@ function PersonalProfile() {
     }
   };
 
-  // Проверка на AI диагноз
   const isAIDiagnosis = (diagnosisText) => {
     return diagnosisText?.includes('AI') || 
            diagnosisText?.includes('ЖАСАНДЫ ИНТЕЛЛЕКТ') ||
            diagnosisText?.includes('🤖');
-  };
-
-  // Группировка медицинской истории
-  const getGroupedMedicalHistory = () => {
-    if (!medicalHistory || medicalHistory.length === 0) return [];
-
-    const recordsMap = {};
-
-    medicalHistory.forEach(prescription => {
-      const recordId = prescription.diagnosis?.medicalRecord?.recordId;
-      if (!recordId) return;
-
-      if (!recordsMap[recordId]) {
-        recordsMap[recordId] = {
-          recordId,
-          medicalRecord: prescription.diagnosis.medicalRecord,
-          diagnoses: {}
-        };
-      }
-
-      const diagnosisId = prescription.diagnosis?.diagnosisId;
-      if (!recordsMap[recordId].diagnoses[diagnosisId]) {
-        recordsMap[recordId].diagnoses[diagnosisId] = {
-          diagnosisId,
-          diagnosis: prescription.diagnosis,
-          prescriptions: []
-        };
-      }
-
-      recordsMap[recordId].diagnoses[diagnosisId].prescriptions.push(prescription);
-    });
-
-    return Object.values(recordsMap).map(record => ({
-      ...record,
-      diagnoses: Object.values(record.diagnoses)
-    }));
   };
 
   const renderAppointments = () => {
@@ -338,8 +399,6 @@ function PersonalProfile() {
         <div className="grid gap-4">
           {appointments.map((appointment) => {
             const statusInfo = getStatusInfo(appointment.status);
-            const appointmentDate = new Date(appointment.appointmentDate);
-            const isPast = appointmentDate < new Date();
             
             return (
               <div key={appointment.appointmentId} className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition">
@@ -418,8 +477,6 @@ function PersonalProfile() {
   };
 
   const renderMedicalHistory = () => {
-    const groupedData = getGroupedMedicalHistory();
-
     if (loadingMedicalHistory) {
       return (
         <div className="text-center py-12">
@@ -429,12 +486,12 @@ function PersonalProfile() {
       );
     }
 
-    if (groupedData.length === 0) {
+    if (!medicalHistory || medicalHistory.length === 0) {
       return (
         <div className="text-center py-12 bg-gray-50 rounded-xl">
           <GiMedicalPack className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <p className="text-gray-500">Медициналық тарих әзірше толтырылмаған</p>
-          <p className="text-sm text-gray-400 mt-1">Дәрігер сіздің медициналық тарихыңызды осында жазады</p>
+          <p className="text-sm text-gray-400 mt-1">Дәрігер сізге диагноз қойғаннан кейін осында пайда болады</p>
         </div>
       );
     }
@@ -442,150 +499,104 @@ function PersonalProfile() {
     return (
       <div className="space-y-6">
         <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-bold text-gray-800">Медициналық тарих</h3>
+          <h3 className="text-xl font-bold text-gray-800 flex items-center">
+            <FaDiagnoses className="mr-2 text-purple-600" />
+            Диагноздар тізімі
+          </h3>
           <span className="text-sm text-gray-500">
-            Барлығы: {groupedData.length} жазба
+            Барлығы: {medicalHistory.length} диагноз
           </span>
         </div>
 
-        {groupedData.map((record) => (
-          <div 
-            key={record.recordId}
-            className="border-2 border-purple-200 rounded-2xl overflow-hidden bg-gradient-to-r from-purple-50 to-pink-50"
-          >
-            {/* Заголовок записи */}
-            <div className="p-5 bg-gradient-to-r from-purple-100 to-pink-100">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <div className="p-3 bg-purple-600 rounded-xl mr-4">
-                    <FaFileMedical className="text-white text-xl" />
+        <div className="space-y-4">
+          {medicalHistory.map((diagnosis) => (
+            <div
+              key={diagnosis.diagnosisId}
+              className={`border-2 rounded-xl overflow-hidden ${
+                isAIDiagnosis(diagnosis.diagnosis)
+                  ? 'border-purple-300 bg-gradient-to-r from-purple-50 to-pink-50'
+                  : 'border-indigo-200 bg-white'
+              }`}
+            >
+              <div className="p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center">
+                    <div className={`p-3 rounded-xl mr-3 ${
+                      isAIDiagnosis(diagnosis.diagnosis)
+                        ? 'bg-gradient-to-r from-purple-500 to-pink-500'
+                        : 'bg-indigo-600'
+                    }`}>
+                      {isAIDiagnosis(diagnosis.diagnosis) ? (
+                        <span className="text-white text-2xl">🤖</span>
+                      ) : (
+                        <FaStethoscope className="text-white text-xl" />
+                      )}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h5 className="font-bold text-gray-800 text-lg">
+                          🩺 Диагноз №{diagnosis.diagnosisId}
+                        </h5>
+                        {isAIDiagnosis(diagnosis.diagnosis) && (
+                          <span className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs px-3 py-1 rounded-full font-bold">
+                            🤖 AI Диагноз
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-600 mt-1">
+                        📅 {formatDateShort(diagnosis.diagnosisDate)}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-bold text-gray-800 text-xl">
-                      📋 Медициналық Жазба #{record.recordId}
-                    </h4>
-                    <p className="text-sm text-gray-600">
-                      Жасалған: {formatDateShort(record.medicalRecord.createdAt)}
-                    </p>
+                  <div className="flex items-center gap-2">
+                    <FaLock className="text-gray-400 text-sm" />
+                    <span className="text-xs text-gray-500">Шифрленген</span>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <span className="bg-purple-600 text-white px-4 py-2 rounded-full text-sm font-bold">
-                    {record.diagnoses.length} диагноз
-                  </span>
+
+                <div className={`p-4 rounded-xl mb-4 ${
+                  isAIDiagnosis(diagnosis.diagnosis)
+                    ? 'bg-purple-50 border-2 border-purple-200'
+                    : 'bg-indigo-50 border-2 border-indigo-200'
+                }`}>
+                  <h6 className="font-bold text-gray-800 mb-3 flex items-center text-sm">
+                    <FaNotesMedical className="mr-2 text-indigo-600" />
+                    Шифрленген диагноз мәтіні:
+                  </h6>
+                  <div className="text-gray-700 text-sm leading-relaxed max-h-40 overflow-y-auto font-mono break-all">
+                    {diagnosis.diagnosis ? diagnosis.diagnosis.substring(0, 200) + '...' : 'Диагноз мәтіні жоқ'}
+                  </div>
+                </div>
+
+                {diagnosis.appointment?.doctor && (
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <div className="flex items-center">
+                      <FaUserMd className="text-blue-600 text-lg mr-3" />
+                      <div>
+                        <p className="font-medium text-gray-800 text-sm">
+                          Дәрігер: {diagnosis.appointment.doctor.user?.firstName} {diagnosis.appointment.doctor.user?.lastName}
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          {diagnosis.appointment.doctor.specialty}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-4 pt-4 border-t border-gray-200 flex gap-3">
+                  <button
+                    onClick={() => handleDecryptDiagnosis(diagnosis)}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:from-emerald-600 hover:to-teal-600 transition text-sm font-medium"
+                  >
+                    <FaLockOpen className="text-sm" />
+                    Диагнозды шешу
+                  </button>
                 </div>
               </div>
             </div>
-
-            {/* Диагнозы */}
-            <div className="p-6 space-y-4">
-              {record.diagnoses.map((diagnosisData) => (
-                <div
-                  key={diagnosisData.diagnosisId}
-                  className={`border-2 rounded-xl overflow-hidden ${
-                    isAIDiagnosis(diagnosisData.diagnosis.diagnosis)
-                      ? 'border-purple-300 bg-white'
-                      : 'border-indigo-200 bg-white'
-                  }`}
-                >
-                  {/* Заголовок диагноза */}
-                  <div className="p-5">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center">
-                        <div className={`p-3 rounded-xl mr-3 ${
-                          isAIDiagnosis(diagnosisData.diagnosis.diagnosis)
-                            ? 'bg-gradient-to-r from-purple-500 to-pink-500'
-                            : 'bg-indigo-600'
-                        }`}>
-                          {isAIDiagnosis(diagnosisData.diagnosis.diagnosis) ? (
-                            <span className="text-white text-2xl">🤖</span>
-                          ) : (
-                            <FaStethoscope className="text-white text-xl" />
-                          )}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h5 className="font-bold text-gray-800 text-lg">
-                              🩺 Диагноз #{diagnosisData.diagnosisId}
-                            </h5>
-                            {isAIDiagnosis(diagnosisData.diagnosis.diagnosis) && (
-                              <span className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs px-3 py-1 rounded-full font-bold">
-                                🤖 AI Диагноз
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm text-gray-600 mt-1">
-                            📅 {formatDateShort(diagnosisData.diagnosis.diagnosisDate)}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-bold">
-                        {diagnosisData.prescriptions.length} рецепт
-                      </span>
-                    </div>
-
-                    {/* Текст диагноза */}
-                    <div className={`p-4 rounded-xl mb-4 ${
-                      isAIDiagnosis(diagnosisData.diagnosis.diagnosis)
-                        ? 'bg-purple-50 border-2 border-purple-200'
-                        : 'bg-indigo-50 border-2 border-indigo-200'
-                    }`}>
-                      <h6 className="font-bold text-gray-800 mb-3 flex items-center text-sm">
-                        <FaNotesMedical className="mr-2 text-indigo-600" />
-                        Диагноз мәтіні:
-                      </h6>
-                      <div className="text-gray-700 whitespace-pre-wrap text-sm leading-relaxed max-h-60 overflow-y-auto">
-                        {diagnosisData.diagnosis.diagnosis}
-                      </div>
-                    </div>
-
-                    {/* Рецепты */}
-                    {diagnosisData.prescriptions.length > 0 && (
-                      <div className="bg-green-50 p-4 rounded-xl border-2 border-green-200">
-                        <h6 className="font-bold text-gray-800 mb-3 flex items-center">
-                          <FaPrescriptionBottle className="mr-2 text-green-600" />
-                          💊 Рецепттер ({diagnosisData.prescriptions.length}):
-                        </h6>
-                        <div className="space-y-3">
-                          {diagnosisData.prescriptions.map((prescription) => (
-                            <div 
-                              key={prescription.prescriptionId}
-                              className="bg-white p-4 rounded-lg border border-green-300"
-                            >
-                              <div className="flex items-center justify-between mb-3">
-                                <div className="flex items-center">
-                                  <div className="p-2 bg-green-500 rounded-lg mr-3">
-                                    <FaPills className="text-white" />
-                                  </div>
-                                  <div>
-                                    <p className="font-bold text-gray-800">
-                                      💊 Рецепт #{prescription.prescriptionId}
-                                    </p>
-                                    <p className="text-sm text-gray-600">
-                                      {formatDateShort(prescription.prescriptionDate)}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              {prescription.callback && (
-                                <div className="bg-green-50 p-3 rounded-lg border border-green-200">
-                                  <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                                    {prescription.callback}
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     );
   };
@@ -625,7 +636,6 @@ function PersonalProfile() {
               key={test.testId}
               className="bg-white border-2 border-blue-200 rounded-xl overflow-hidden hover:shadow-lg transition"
             >
-              {/* Заголовок теста */}
               <div className="p-5 bg-gradient-to-r from-blue-50 to-cyan-50">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
@@ -649,7 +659,6 @@ function PersonalProfile() {
                 </div>
               </div>
 
-              {/* Результаты */}
               <div className="p-5">
                 {test.result && (
                   <div className="bg-gray-50 p-4 rounded-xl border-2 border-gray-200 mb-4">
@@ -663,7 +672,6 @@ function PersonalProfile() {
                   </div>
                 )}
 
-                {/* Файлы и изображения */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {test.imageUrl && (
                     <div className="bg-purple-50 p-4 rounded-xl border-2 border-purple-200">
@@ -671,27 +679,28 @@ function PersonalProfile() {
                         <FaImage className="text-purple-600 mr-2" />
                         <h6 className="font-bold text-gray-800">Сурет</h6>
                       </div>
-                      <a 
-                        href={test.imageUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block"
-                      >
-                        <img 
-                          src={test.imageUrl} 
-                          alt={test.testName}
-                          className="w-full h-48 object-cover rounded-lg border-2 border-purple-300 hover:border-purple-500 transition"
-                        />
-                      </a>
-                      <a 
-                        href={test.imageUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-2 inline-flex items-center text-purple-600 hover:text-purple-800 text-sm font-medium"
-                      >
-                        <FaImage className="mr-1" />
-                        Суретті ашу
-                      </a>
+                      <img 
+                        src={test.imageUrl} 
+                        alt={test.testName}
+                        className="w-full h-48 object-cover rounded-lg border-2 border-purple-300 cursor-pointer hover:opacity-90 transition"
+                        onClick={() => handleViewImage(test.imageUrl)}
+                      />
+                      <div className="flex gap-2 mt-3">
+                        <button
+                          onClick={() => handleViewImage(test.imageUrl)}
+                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-medium"
+                        >
+                          <FaEye className="text-sm" />
+                          Суретті қарау
+                        </button>
+                        <button
+                          onClick={() => handleDownloadFile(test.imageUrl, `${test.testName}.jpg`)}
+                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 text-sm font-medium"
+                        >
+                          <FaDownload className="text-sm" />
+                          Жүктеу
+                        </button>
+                      </div>
                     </div>
                   )}
 
@@ -699,28 +708,25 @@ function PersonalProfile() {
                     <div className="bg-green-50 p-4 rounded-xl border-2 border-green-200">
                       <div className="flex items-center mb-3">
                         <FaFileAlt className="text-green-600 mr-2" />
-                        <h6 className="font-bold text-gray-800">Файл</h6>
+                        <h6 className="font-bold text-gray-800">Құжат</h6>
                       </div>
-                      <div className="flex items-center justify-center h-48 bg-white rounded-lg border-2 border-green-300">
+                      <div className="flex items-center justify-center h-32 bg-white rounded-lg border-2 border-green-300">
                         <div className="text-center">
-                          <FaFileAlt className="text-5xl text-green-600 mx-auto mb-3" />
-                          <p className="text-sm text-gray-600">Құжат қол жетімді</p>
+                          <FaFileAlt className="text-4xl text-green-600 mx-auto mb-2" />
+                          <p className="text-xs text-gray-600">{test.fileUrl.split('/').pop()}</p>
                         </div>
                       </div>
-                      <a 
-                        href={test.fileUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-2 inline-flex items-center text-green-600 hover:text-green-800 text-sm font-medium"
+                      <button
+                        onClick={() => handleDownloadFile(test.fileUrl, test.fileUrl.split('/').pop())}
+                        className="w-full mt-3 flex items-center justify-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium"
                       >
-                        <FaDownload className="mr-1" />
-                        Файлды жүктеу
-                      </a>
+                        <FaDownload className="text-sm" />
+                        Құжатты жүктеу
+                      </button>
                     </div>
                   )}
                 </div>
 
-                {/* Дата создания */}
                 <div className="mt-4 pt-4 border-t border-gray-200">
                   <p className="text-sm text-gray-500">
                     Жасалған: {formatDate(test.createdAt)}
@@ -738,13 +744,10 @@ function PersonalProfile() {
     switch (activeTab) {
       case 'appointments':
         return renderAppointments();
-
       case 'medicalHistory':
         return renderMedicalHistory();
-
       case 'labResults':
         return renderLabResults();
-
       default:
         return null;
     }
@@ -753,7 +756,6 @@ function PersonalProfile() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-50 to-emerald-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Заголовок */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -764,7 +766,6 @@ function PersonalProfile() {
         </motion.div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* Боковая панель */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 sticky top-8">
               {patientInfo && (
@@ -864,7 +865,6 @@ function PersonalProfile() {
             </div>
           </div>
 
-          {/* Основной контент */}
           <div className="lg:col-span-3">
             <motion.div
               key={activeTab}
@@ -883,7 +883,6 @@ function PersonalProfile() {
               )}
             </motion.div>
             
-            {/* Медицинская информация */}
             <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-gradient-to-r from-blue-50 to-sky-50 p-6 rounded-xl border border-blue-100">
                 <div className="flex items-center mb-3">
@@ -935,7 +934,6 @@ function PersonalProfile() {
               className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Заголовок */}
               <div className="p-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white sticky top-0 z-10">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
@@ -958,7 +956,6 @@ function PersonalProfile() {
                 </div>
               </div>
 
-              {/* Контент */}
               <div className="p-6">
                 {loadingDetails ? (
                   <div className="text-center py-12">
@@ -975,46 +972,53 @@ function PersonalProfile() {
                   <div className="space-y-6">
                     {appointmentDetails.map((prescription) => (
                       <div key={prescription.prescriptionId} className="border-2 border-indigo-200 rounded-xl overflow-hidden">
-                        {/* Диагноз */}
                         {prescription.diagnosis && (
                           <div className="p-5 bg-gradient-to-r from-indigo-50 to-blue-50">
-                            <div className="flex items-center mb-4">
-                              <div className={`p-3 rounded-xl mr-3 ${
-                                isAIDiagnosis(prescription.diagnosis.diagnosis)
-                                  ? 'bg-gradient-to-r from-purple-500 to-pink-500'
-                                  : 'bg-indigo-600'
-                              }`}>
-                                {isAIDiagnosis(prescription.diagnosis.diagnosis) ? (
-                                  <span className="text-white text-2xl">🤖</span>
-                                ) : (
-                                  <FaStethoscope className="text-white text-xl" />
-                                )}
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <h3 className="font-bold text-gray-800 text-lg">
-                                    Диагноз #{prescription.diagnosis.diagnosisId}
-                                  </h3>
-                                  {isAIDiagnosis(prescription.diagnosis.diagnosis) && (
-                                    <span className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs px-2 py-1 rounded-full font-bold">
-                                      🤖 AI
-                                    </span>
+                            <div className="flex items-center justify-between mb-4">
+                              <div className="flex items-center">
+                                <div className={`p-3 rounded-xl mr-3 ${
+                                  isAIDiagnosis(prescription.diagnosis.diagnosis)
+                                    ? 'bg-gradient-to-r from-purple-500 to-pink-500'
+                                    : 'bg-indigo-600'
+                                }`}>
+                                  {isAIDiagnosis(prescription.diagnosis.diagnosis) ? (
+                                    <span className="text-white text-2xl">🤖</span>
+                                  ) : (
+                                    <FaStethoscope className="text-white text-xl" />
                                   )}
                                 </div>
-                                <p className="text-sm text-gray-600">
-                                  {formatDateShort(prescription.diagnosis.diagnosisDate)}
-                                </p>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h3 className="font-bold text-gray-800 text-lg">
+                                      Диагноз #{prescription.diagnosis.diagnosisId}
+                                    </h3>
+                                    {isAIDiagnosis(prescription.diagnosis.diagnosis) && (
+                                      <span className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs px-2 py-1 rounded-full font-bold">
+                                        🤖 AI
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm text-gray-600">
+                                    {formatDateShort(prescription.diagnosis.diagnosisDate)}
+                                  </p>
+                                </div>
                               </div>
+                              <button
+                                onClick={() => handleDecryptDiagnosis(prescription.diagnosis)}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 text-sm font-medium"
+                              >
+                                <FaLockOpen className="text-xs" />
+                                Шешу
+                              </button>
                             </div>
                             <div className="bg-white p-4 rounded-lg border border-indigo-200">
                               <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                                {prescription.diagnosis.diagnosis}
+                                {prescription.diagnosis.diagnosis?.substring(0, 150)}...
                               </p>
                             </div>
                           </div>
                         )}
 
-                        {/* Рецепт */}
                         <div className="p-5 bg-green-50 border-t-2 border-green-200">
                           <div className="flex items-center mb-4">
                             <div className="p-2 bg-green-500 rounded-lg mr-3">
@@ -1038,7 +1042,6 @@ function PersonalProfile() {
                           )}
                         </div>
 
-                        {/* Информация о враче */}
                         {prescription.appointment?.doctor && (
                           <div className="p-5 bg-gray-50 border-t border-gray-200">
                             <div className="flex items-center">
@@ -1057,6 +1060,163 @@ function PersonalProfile() {
                       </div>
                     ))}
                   </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Модальное окно расшифровки диагноза */}
+      <AnimatePresence>
+        {showDecryptModal && selectedDiagnosis && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 backdrop-blur-sm"
+            onClick={closeDecryptModal}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className={`p-6 sticky top-0 z-10 ${
+                isAIDiagnosis(selectedDiagnosis.diagnosis)
+                  ? 'bg-gradient-to-r from-purple-600 to-pink-600'
+                  : 'bg-gradient-to-r from-emerald-600 to-teal-600'
+              } text-white`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <div className="p-3 bg-white/20 rounded-xl mr-4">
+                      {isAIDiagnosis(selectedDiagnosis.diagnosis) ? (
+                        <span className="text-2xl">🤖</span>
+                      ) : (
+                        <FaDiagnoses className="text-2xl" />
+                      )}
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold">Диагнозды шешу</h2>
+                      <p className="text-white/80 text-sm mt-1">
+                        Диагноз №{selectedDiagnosis.diagnosisId}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={closeDecryptModal}
+                    className="p-2 hover:bg-white/20 rounded-xl transition"
+                  >
+                    <FaTimes className="text-2xl" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6">
+                {!decryptedDiagnosis ? (
+                  <>
+                    <div className="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-4 mb-6">
+                      <div className="flex items-start">
+                        <FaLock className="text-yellow-600 text-xl mr-3 mt-0.5" />
+                        <div>
+                          <h3 className="font-bold text-gray-800 mb-1">Шифрланған диагноз</h3>
+                          <p className="text-sm text-gray-700">
+                            Бұл диагноз қорғалған. Оны оқу үшін арнайы кілт қажет.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-3 p-3 bg-white rounded-lg font-mono text-xs break-all">
+                        {selectedDiagnosis.diagnosis}
+                      </div>
+                    </div>
+
+                    <div className="mb-6">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Шифрлау кілтін енгізіңіз:
+                      </label>
+                      <input
+                        type="text"
+                        value={decryptionKey}
+                        onChange={(e) => setDecryptionKey(e.target.value)}
+                        placeholder="Кілтті енгізіңіз..."
+                        className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-emerald-500"
+                        onKeyPress={(e) => e.key === 'Enter' && handleDecryptSubmit()}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Кілтті дәрігерден немесе электрондық поштадан алуға болады
+                      </p>
+                    </div>
+
+                    {decryptError && (
+                      <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-xl text-sm border border-red-200">
+                        {decryptError}
+                      </div>
+                    )}
+
+                    <div className="flex gap-3">
+                      <button
+                        onClick={handleDecryptSubmit}
+                        disabled={decrypting || !decryptionKey.trim()}
+                        className={`flex-1 py-3 rounded-xl font-medium flex items-center justify-center gap-2 ${
+                          decrypting || !decryptionKey.trim()
+                            ? 'bg-gray-300 cursor-not-allowed'
+                            : 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700'
+                        }`}
+                      >
+                        {decrypting ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                            Шешу...
+                          </>
+                        ) : (
+                          <>
+                            <FaLockOpen />
+                            Диагнозды шешу
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={closeDecryptModal}
+                        className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200"
+                      >
+                        Болдырмау
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-xl p-5 mb-6">
+                      <div className="flex items-center mb-4">
+                        <FaLockOpen className="text-emerald-600 text-xl mr-3" />
+                        <h3 className="font-bold text-gray-800 text-lg">Шешілген диагноз</h3>
+                      </div>
+                      <div className="bg-white p-4 rounded-xl border border-emerald-200">
+                        <p className="text-gray-800 whitespace-pre-wrap leading-relaxed">
+                          {decryptedDiagnosis}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => {
+                          setDecryptedDiagnosis('');
+                          setDecryptionKey('');
+                        }}
+                        className="flex-1 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 font-medium"
+                      >
+                        Басқа кілтпен қайта шешу
+                      </button>
+                      <button
+                        onClick={closeDecryptModal}
+                        className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 font-medium"
+                      >
+                        Жабу
+                      </button>
+                    </div>
+                  </>
                 )}
               </div>
             </motion.div>

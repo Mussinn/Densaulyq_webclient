@@ -33,7 +33,7 @@ const MedicalTestsPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
   
-  // Форма для нового теста
+  // Жаңа тест үшін форма
   const [newTest, setNewTest] = useState({
     testName: '',
     result: '',
@@ -49,36 +49,37 @@ const MedicalTestsPage = () => {
   
   const { token } = useSelector((state) => state.token);
   
-  // Загрузка данных
+  // Деректерді жүктеу
   useEffect(() => {
     fetchPatientInfo();
     fetchPatientTests();
   }, [token]);
   
-  // Получение информации о текущем пациенте
+  // Ағымдағы пациент туралы ақпарат алу
   const fetchPatientInfo = async () => {
     try {
-      const response = await api.get('/api/v1/users/me', {
+      const response = await api.get('/api/v1/patient/me', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setPatientInfo(response.data);
     } catch (err) {
-      console.error('Ошибка загрузки информации о пациенте:', err);
+      console.error('Пациент туралы ақпаратты жүктеу қатесі:', err);
     }
   };
   
-  // Загрузка тестов текущего пациента
+  // Ағымдағы пациенттің тесттерін жүктеу
   const fetchPatientTests = async () => {
     try {
       setLoading(true);
       
-      // Получаем ID пациента из профиля
-      const userRes = await api.get('/api/v1/users/me', {
+      // Профильден пациенттің ID-ін алу
+      const patientRes = await api.get('/api/v1/patient/me', {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      const user = userRes.data;
-      const patientId = user?.patient?.patientId || user?.userId;
+
+      const patient = patientRes.data;
+      const patientId = patient?.patientId;
       
       if (patientId) {
         const response = await api.get(`/api/v1/test/patient/${patientId}`, {
@@ -87,35 +88,36 @@ const MedicalTestsPage = () => {
         setTests(response.data || []);
       }
     } catch (err) {
-      console.error('Ошибка загрузки тестов:', err);
+      console.error('Тесттерді жүктеу қатесі:', err);
       setTests([]);
     } finally {
       setLoading(false);
     }
   };
   
-  // Создание нового теста
+  // Жаңа тест құру
   const handleCreateTest = async (e) => {
     e.preventDefault();
     
     if (!newTest.testName || !newTest.result) {
-      alert('Заполните обязательные поля: название теста и результат');
+      alert('Міндетті өрістерді толтырыңыз: тест атауы және нәтиже');
       return;
     }
     
     setUploading(true);
     
     try {
-      // Получаем ID пациента из профиля
-      const userRes = await api.get('/api/v1/users/me', {
+      // Профильден пациенттің ID-ін алу
+      const patientRes = await api.get('/api/v1/patient/me', {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      const user = userRes.data;
-      const patientId = user?.patient?.patientId || user?.userId;
+
+      const patient = patientRes.data;
+      const patientId = patient?.patientId;
       
       if (!patientId) {
-        throw new Error('Не удалось определить ID пациента');
+        throw new Error('Пациент ID-ін анықтау мүмкін болмады');
       }
       
       const formData = new FormData();
@@ -143,54 +145,54 @@ const MedicalTestsPage = () => {
         }
       });
       
-      alert('Тест успешно сохранен!');
+      alert('Тест сәтті сақталды!');
       setShowAddModal(false);
       resetForm();
       
-      // Обновляем список тестов
+      // Тесттер тізімін жаңарту
       await fetchPatientTests();
       
     } catch (err) {
-      console.error('Ошибка создания теста:', err);
-      alert(`Ошибка создания теста: ${err.response?.data?.message || err.message}`);
+      console.error('Тест құру қатесі:', err);
+      alert(`Тест құру қатесі: ${err.response?.data?.message || err.message}`);
     } finally {
       setUploading(false);
     }
   };
   
-  // Удаление теста
+  // Тестті жою
   const handleDeleteTest = async (testId) => {
-    if (!window.confirm('Вы уверены, что хотите удалить этот тест?')) return;
+    if (!window.confirm('Бұл тестті жойғыңыз келетініне сенімдісіз бе?')) return;
     
     try {
       await api.delete(`/api/v1/test/${testId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      alert('Тест успешно удален!');
+      alert('Тест сәтті жойылды!');
       setTests(tests.filter(test => test.testId !== testId));
       
     } catch (err) {
-      console.error('Ошибка удаления теста:', err);
-      alert(`Ошибка удаления теста: ${err.response?.data?.message || err.message}`);
+      console.error('Тестті жою қатесі:', err);
+      alert(`Тестті жою қатесі: ${err.response?.data?.message || err.message}`);
     }
   };
   
-  // Просмотр теста
+  // Тестті қарау
   const handleViewTest = (test) => {
     setSelectedTest(test);
     setShowViewModal(true);
   };
   
-  // Скачивание файла
+  // Файлды жүктеу
   const handleDownloadFile = async (url, filename) => {
     if (!url) {
-      alert('URL файла не найден');
+      alert('Файл URL-і табылмады');
       return;
     }
     
     try {
-      // Открываем файл в новой вкладке для скачивания
+      // Жүктеу үшін файлды жаңа қойындыда ашу
       const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -198,7 +200,7 @@ const MedicalTestsPage = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Ошибка при скачивании файла');
+        throw new Error('Файлды жүктеу кезінде қате');
       }
 
       const blob = await response.blob();
@@ -212,21 +214,21 @@ const MedicalTestsPage = () => {
       window.URL.revokeObjectURL(downloadUrl);
       
     } catch (err) {
-      console.error('Ошибка скачивания файла:', err);
-      alert('Ошибка скачивания файла. Попробуйте открыть файл в новой вкладке.');
+      console.error('Файлды жүктеу қатесі:', err);
+      alert('Файлды жүктеу қатесі. Файлды жаңа қойында ашып көріңіз.');
       
-      // Резервный метод - открыть в новой вкладке
+      // Резервтік әдіс - жаңа қойында ашу
       window.open(url, '_blank');
     }
   };
   
-  // Просмотр изображения
+  // Суретті қарау
   const handleViewImage = (url) => {
     if (!url) return;
     window.open(url.replace('/files/', '/files/view/'), '_blank');
   };
   
-  // Обработчики файлов
+  // Файл өңдеушілері
   const handleFileChange = (e, fileType) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -256,9 +258,9 @@ const MedicalTestsPage = () => {
     setPreviewFile(null);
   };
   
-  // Фильтрация тестов
+  // Тесттерді сүзгілеу
   const filteredTests = tests.filter(test => {
-    // Фильтр по типу
+    // Түрі бойынша сүзгі
     if (filterType !== 'all') {
       const testLower = test.testName?.toLowerCase() || '';
       if (filterType === 'xray' && !testLower.includes('рентген') && !testLower.includes('снимок') && !testLower.includes('x-ray')) {
@@ -274,7 +276,7 @@ const MedicalTestsPage = () => {
       }
     }
     
-    // Поиск
+    // Іздеу
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
       return (
@@ -286,7 +288,7 @@ const MedicalTestsPage = () => {
     return true;
   });
   
-  // Получение иконки для типа теста
+  // Тест түріне арналған иконканы алу
   const getTestIcon = (testName) => {
     const name = testName?.toLowerCase() || '';
     if (name.includes('рентген') || name.includes('снимок') || name.includes('x-ray')) {
@@ -298,11 +300,11 @@ const MedicalTestsPage = () => {
     }
   };
   
-  // Форматирование даты
+  // Күнді пішімдеу
   const formatDate = (dateString) => {
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString('ru-RU', {
+      return date.toLocaleDateString('kk-KZ', {
         day: 'numeric',
         month: 'long',
         year: 'numeric',
@@ -314,33 +316,33 @@ const MedicalTestsPage = () => {
     }
   };
   
-  // Получение имени файла из URL
+  // URL-ден файл атын алу
   const getFileNameFromUrl = (url) => {
     if (!url) return 'Файл';
     const parts = url.split('/');
     return parts[parts.length - 1] || 'Файл';
   };
   
-  // Получение типа файла из URL
+  // URL-ден файл түрін алу
   const getFileTypeFromUrl = (url) => {
     if (!url) return '';
     if (url.includes('.pdf')) return 'PDF';
-    if (url.includes('.jpg') || url.includes('.jpeg') || url.includes('.png')) return 'Изображение';
-    if (url.includes('.doc') || url.includes('.docx')) return 'Документ';
+    if (url.includes('.jpg') || url.includes('.jpeg') || url.includes('.png')) return 'Сурет';
+    if (url.includes('.doc') || url.includes('.docx')) return 'Құжат';
     return 'Файл';
   };
   
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
-      {/* Заголовок и информация о пациенте */}
+      {/* Тақырып және пациент туралы ақпарат */}
       <div className="mb-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">
               <FaFileMedical className="inline mr-3 text-blue-600" />
-              Мои медицинские тесты и анализы
+              Менің медициналық тесттерім мен талдауларым
             </h1>
-            <p className="text-gray-600">Просмотр и управление результатами анализов</p>
+            <p className="text-gray-600">Талдау нәтижелерін қарау және басқару</p>
           </div>
           
           {patientInfo && (
@@ -363,62 +365,62 @@ const MedicalTestsPage = () => {
           )}
         </div>
         
-        {/* Кнопка добавления и статистика */}
+        {/* Қосу батырмасы және статистика */}
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
           <button
             onClick={() => setShowAddModal(true)}
             className="mb-4 md:mb-0 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-200 flex items-center shadow-md hover:shadow-lg"
           >
-            <FaPlus className="mr-2" /> Добавить новый тест
+            <FaPlus className="mr-2" /> Жаңа тест қосу
           </button>
           
           <div className="flex items-center space-x-4">
             <div className="text-center">
               <div className="text-2xl font-bold text-blue-600">{tests.length}</div>
-              <div className="text-sm text-gray-600">Всего тестов</div>
+              <div className="text-sm text-gray-600">Барлық тесттер</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-green-600">
                 {tests.filter(t => t.imageUrl).length}
               </div>
-              <div className="text-sm text-gray-600">Снимков</div>
+              <div className="text-sm text-gray-600">Суреттер</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-purple-600">
                 {tests.filter(t => t.fileUrl).length}
               </div>
-              <div className="text-sm text-gray-600">Документов</div>
+              <div className="text-sm text-gray-600">Құжаттар</div>
             </div>
           </div>
         </div>
         
-        {/* Фильтры и поиск */}
+        {/* Сүзгілер және іздеу */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                <FaFilter className="inline mr-2" /> Фильтр по типу:
+                <FaFilter className="inline mr-2" /> Түрі бойынша сүзгі:
               </label>
               <select
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
                 className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500"
               >
-                <option value="all">Все типы тестов</option>
-                <option value="xray">Рентген и снимки</option>
-                <option value="lab">Лабораторные анализы</option>
-                <option value="other">Другие тесты</option>
+                <option value="all">Барлық тест түрлері</option>
+                <option value="xray">Рентген және суреттер</option>
+                <option value="lab">Зертханалық талдаулар</option>
+                <option value="other">Басқа тесттер</option>
               </select>
             </div>
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                <FaSearch className="inline mr-2" /> Поиск:
+                <FaSearch className="inline mr-2" /> Іздеу:
               </label>
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="Поиск по названию теста или результату..."
+                  placeholder="Тест атауы немесе нәтиже бойынша іздеу..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 pl-12 text-sm focus:outline-none focus:border-blue-500"
@@ -438,7 +440,7 @@ const MedicalTestsPage = () => {
         </div>
       </div>
       
-      {/* Список тестов */}
+      {/* Тесттер тізімі */}
       <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
         <div className="p-6 border-b border-gray-100">
           <div className="flex items-center justify-between">
@@ -447,11 +449,11 @@ const MedicalTestsPage = () => {
                 <FaStethoscope className="text-xl text-blue-600" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-gray-800">Мои тесты</h2>
+                <h2 className="text-xl font-bold text-gray-800">Менің тесттерім</h2>
                 <p className="text-sm text-gray-500">
                   {filteredTests.length === tests.length 
-                    ? `Всего ${tests.length} тестов`
-                    : `Найдено ${filteredTests.length} из ${tests.length} тестов`}
+                    ? `Барлығы ${tests.length} тест`
+                    : `${filteredTests.length} / ${tests.length} тест табылды`}
                 </p>
               </div>
             </div>
@@ -462,7 +464,7 @@ const MedicalTestsPage = () => {
               disabled={loading}
             >
               {loading ? <FaSpinner className="animate-spin mr-2" /> : <FaCalendarAlt className="mr-2" />}
-              Обновить
+              Жаңарту
             </button>
           </div>
         </div>
@@ -471,7 +473,7 @@ const MedicalTestsPage = () => {
           {loading ? (
             <div className="py-12 text-center">
               <FaSpinner className="animate-spin mx-auto text-3xl text-blue-600 mb-4" />
-              <p className="text-gray-600">Загрузка тестов...</p>
+              <p className="text-gray-600">Тесттер жүктелуде...</p>
             </div>
           ) : filteredTests.length === 0 ? (
             <div className="py-12 text-center">
@@ -479,18 +481,18 @@ const MedicalTestsPage = () => {
                 <FaFileMedical className="text-4xl mx-auto" />
               </div>
               <h3 className="text-lg font-medium text-gray-700 mb-2">
-                {searchTerm || filterType !== 'all' ? 'Тесты не найдены' : 'Нет сохраненных тестов'}
+                {searchTerm || filterType !== 'all' ? 'Тесттер табылмады' : 'Сақталған тесттер жоқ'}
               </h3>
               <p className="text-gray-500 mb-4">
                 {searchTerm || filterType !== 'all' 
-                  ? 'Попробуйте изменить параметры поиска'
-                  : 'Добавьте первый тест для отслеживания результатов анализов'}
+                  ? 'Іздеу параметрлерін өзгертіп көріңіз'
+                  : 'Талдау нәтижелерін бақылау үшін бірінші тестіңізді қосыңыз'}
               </p>
               <button
                 onClick={() => setShowAddModal(true)}
                 className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-colors"
               >
-                <FaPlus className="inline mr-2" /> Добавить тест
+                <FaPlus className="inline mr-2" /> Тест қосу
               </button>
             </div>
           ) : (
@@ -513,7 +515,7 @@ const MedicalTestsPage = () => {
                           </div>
                           
                           <div className="mb-3">
-                            <h4 className="text-sm font-medium text-gray-700 mb-1">Результат:</h4>
+                            <h4 className="text-sm font-medium text-gray-700 mb-1">Нәтиже:</h4>
                             <p className="text-gray-800 bg-white p-3 rounded-lg border border-gray-200">
                               {test.result}
                             </p>
@@ -527,7 +529,7 @@ const MedicalTestsPage = () => {
                             )}
                             {test.imageUrl && (
                               <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
-                                <FaFileImage className="mr-1" /> Изображение
+                                <FaFileImage className="mr-1" /> Сурет
                               </span>
                             )}
                           </div>
@@ -541,7 +543,7 @@ const MedicalTestsPage = () => {
                           onClick={() => handleViewTest(test)}
                           className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center justify-center text-sm font-medium"
                         >
-                          <FaEye className="mr-2" /> Подробнее
+                          <FaEye className="mr-2" /> Толығырақ
                         </button>
                         
                         {test.fileUrl && (
@@ -549,7 +551,7 @@ const MedicalTestsPage = () => {
                             onClick={() => handleDownloadFile(test.fileUrl, getFileNameFromUrl(test.fileUrl))}
                             className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors flex items-center justify-center text-sm font-medium"
                           >
-                            <FaDownload className="mr-2" /> Скачать документ
+                            <FaDownload className="mr-2" /> Құжатты жүктеу
                           </button>
                         )}
                         
@@ -559,13 +561,13 @@ const MedicalTestsPage = () => {
                               onClick={() => handleViewImage(test.imageUrl)}
                               className="px-4 py-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors flex items-center justify-center text-sm font-medium"
                             >
-                              <FaEye className="mr-2" /> Просмотр снимка
+                              <FaEye className="mr-2" /> Суретті қарау
                             </button>
                             <button
                               onClick={() => handleDownloadFile(test.imageUrl, getFileNameFromUrl(test.imageUrl))}
                               className="px-4 py-2 bg-purple-500 text-white rounded-xl hover:bg-purple-600 transition-colors flex items-center justify-center text-sm font-medium"
                             >
-                              <FaDownload className="mr-2" /> Скачать снимок
+                              <FaDownload className="mr-2" /> Суретті жүктеу
                             </button>
                           </>
                         )}
@@ -574,7 +576,7 @@ const MedicalTestsPage = () => {
                           onClick={() => handleDeleteTest(test.testId)}
                           className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors flex items-center justify-center text-sm font-medium"
                         >
-                          <FaTrash className="mr-2" /> Удалить
+                          <FaTrash className="mr-2" /> Жою
                         </button>
                       </div>
                     </div>
@@ -586,7 +588,7 @@ const MedicalTestsPage = () => {
         </div>
       </div>
       
-      {/* Модалка добавления теста */}
+      {/* Тест қосу модальды терезесі */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl transform transition-all max-h-[90vh] overflow-y-auto">
@@ -597,8 +599,8 @@ const MedicalTestsPage = () => {
                     <FaFileMedical className="text-xl text-white" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-gray-800">Добавить новый тест</h2>
-                    <p className="text-sm text-gray-500">Заполните информацию о вашем тесте или анализе</p>
+                    <h2 className="text-xl font-bold text-gray-800">Жаңа тест қосу</h2>
+                    <p className="text-sm text-gray-500">Тест немесе талдау туралы ақпаратты толтырыңыз</p>
                   </div>
                 </div>
                 <button
@@ -624,21 +626,21 @@ const MedicalTestsPage = () => {
                       <h3 className="font-bold text-gray-800 text-lg">
                         {patientInfo?.firstName} {patientInfo?.lastName}
                       </h3>
-                      <p className="text-gray-600 text-sm">Тест будет сохранен в вашу медицинскую карту</p>
+                      <p className="text-gray-600 text-sm">Тест сіздің медициналық картаңызға сақталады</p>
                     </div>
                   </div>
                 </div>
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Название теста <span className="text-red-500">*</span>
+                    Тест атауы <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     required
                     value={newTest.testName}
                     onChange={(e) => setNewTest({...newTest, testName: e.target.value})}
-                    placeholder="Например: Рентген легких, Анализ крови, МРТ"
+                    placeholder="Мысалы: Өкпе рентгені, Қан талдауы, МРТ"
                     className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500"
                   />
                 </div>
@@ -646,7 +648,7 @@ const MedicalTestsPage = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     <FaCalendarAlt className="inline mr-2 text-blue-500" />
-                    Дата проведения теста
+                    Тест өткізілген күні
                   </label>
                   <input
                     type="datetime-local"
@@ -658,13 +660,13 @@ const MedicalTestsPage = () => {
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Результат теста <span className="text-red-500">*</span>
+                    Тест нәтижесі <span className="text-red-500">*</span>
                   </label>
                   <textarea
                     required
                     value={newTest.result}
                     onChange={(e) => setNewTest({...newTest, result: e.target.value})}
-                    placeholder="Введите результаты вашего теста или анализа..."
+                    placeholder="Тест немесе талдау нәтижелерін енгізіңіз..."
                     rows="4"
                     className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500"
                   />
@@ -674,7 +676,7 @@ const MedicalTestsPage = () => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       <FaFilePdf className="inline mr-2 text-red-500" />
-                      Прикрепить документ (PDF, DOC, и т.д.)
+                      Құжатты тіркеу (PDF, DOC, т.б.)
                     </label>
                     <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-blue-500 transition-colors">
                       <input
@@ -687,9 +689,9 @@ const MedicalTestsPage = () => {
                       <label htmlFor="file-upload" className="cursor-pointer block">
                         <FaFilePdf className="text-3xl text-gray-400 mx-auto mb-2" />
                         <span className="text-sm text-gray-600">
-                          {previewFile || 'Нажмите для выбора файла'}
+                          {previewFile || 'Файл таңдау үшін басыңыз'}
                         </span>
-                        <p className="text-xs text-gray-500 mt-1">PDF, DOC, XLS до 10MB</p>
+                        <p className="text-xs text-gray-500 mt-1">PDF, DOC, XLS 10MB-ға дейін</p>
                       </label>
                     </div>
                   </div>
@@ -697,7 +699,7 @@ const MedicalTestsPage = () => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       <FaFileImage className="inline mr-2 text-purple-500" />
-                      Прикрепить изображение (рентген, снимок)
+                      Суретті тіркеу (рентген, сурет)
                     </label>
                     <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-purple-500 transition-colors">
                       <input
@@ -710,15 +712,15 @@ const MedicalTestsPage = () => {
                       <label htmlFor="image-upload" className="cursor-pointer block">
                         <FaFileImage className="text-3xl text-gray-400 mx-auto mb-2" />
                         <span className="text-sm text-gray-600">
-                          {previewImage ? 'Изображение выбрано' : 'Нажмите для выбора изображения'}
+                          {previewImage ? 'Сурет таңдалды' : 'Сурет таңдау үшін басыңыз'}
                         </span>
-                        <p className="text-xs text-gray-500 mt-1">JPG, PNG до 10MB</p>
+                        <p className="text-xs text-gray-500 mt-1">JPG, PNG 10MB-ға дейін</p>
                       </label>
                     </div>
                     
                     {previewImage && (
                       <div className="mt-3">
-                        <p className="text-sm font-medium text-gray-700 mb-2">Предпросмотр:</p>
+                        <p className="text-sm font-medium text-gray-700 mb-2">Алдын ала қарау:</p>
                         <img 
                           src={previewImage} 
                           alt="Preview" 
@@ -733,12 +735,12 @@ const MedicalTestsPage = () => {
                   <div className="flex items-start">
                     <FaExclamationTriangle className="text-blue-500 mt-0.5 mr-3 flex-shrink-0" />
                     <div>
-                      <h4 className="font-medium text-gray-800 text-sm mb-1">Полезные советы:</h4>
+                      <h4 className="font-medium text-gray-800 text-sm mb-1">Пайдалы кеңестер:</h4>
                       <p className="text-gray-600 text-xs">
-                        • Сохраняйте результаты всех медицинских обследований<br/>
-                        • Прикрепляйте оригиналы снимков и документов<br/>
-                        • Указывайте точную дату проведения теста<br/>
-                        • Эти данные помогут вашему врачу в диагностике
+                        • Барлық медициналық тексерулердің нәтижелерін сақтаңыз<br/>
+                        • Суреттер мен құжаттардың түпнұсқаларын тіркеңіз<br/>
+                        • Тесттің нақты күнін көрсетіңіз<br/>
+                        • Бұл деректер сіздің дәрігеріңізге диагностикада көмектеседі
                       </p>
                     </div>
                   </div>
@@ -756,11 +758,11 @@ const MedicalTestsPage = () => {
                   >
                     {uploading ? (
                       <>
-                        <FaSpinner className="animate-spin mr-2" /> Сохранение...
+                        <FaSpinner className="animate-spin mr-2" /> Сақталуда...
                       </>
                     ) : (
                       <>
-                        <FaCheckCircle className="mr-2" /> Сохранить тест
+                        <FaCheckCircle className="mr-2" /> Тестті сақтау
                       </>
                     )}
                   </button>
@@ -773,7 +775,7 @@ const MedicalTestsPage = () => {
                     }}
                     className="px-6 bg-gray-100 text-gray-700 py-3.5 rounded-xl hover:bg-gray-200 transition-all flex items-center justify-center font-medium border border-gray-200"
                   >
-                    Отмена
+                    Болдырмау
                   </button>
                 </div>
               </div>
@@ -782,7 +784,7 @@ const MedicalTestsPage = () => {
         </div>
       )}
       
-      {/* Модалка просмотра теста */}
+      {/* Тестті қарау модальды терезесі */}
       {showViewModal && selectedTest && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl max-w-3xl w-full shadow-2xl transform transition-all max-h-[90vh] overflow-y-auto">
@@ -794,7 +796,7 @@ const MedicalTestsPage = () => {
                   </div>
                   <div>
                     <h2 className="text-xl font-bold text-gray-800">{selectedTest.testName}</h2>
-                    <p className="text-sm text-gray-500">Детальная информация о тесте</p>
+                    <p className="text-sm text-gray-500">Тест туралы толық ақпарат</p>
                   </div>
                 </div>
                 <button
@@ -811,7 +813,7 @@ const MedicalTestsPage = () => {
                 <div className="md:col-span-2">
                   <div className="space-y-6">
                     <div>
-                      <h3 className="text-lg font-bold text-gray-800 mb-3">Результат теста</h3>
+                      <h3 className="text-lg font-bold text-gray-800 mb-3">Тест нәтижесі</h3>
                       <div className="bg-white rounded-xl p-4 border border-gray-200">
                         <p className="text-gray-800 whitespace-pre-line">{selectedTest.result}</p>
                       </div>
@@ -821,11 +823,11 @@ const MedicalTestsPage = () => {
                 
                 <div className="space-y-6">
                   <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                    <h3 className="font-bold text-gray-800 mb-3">Информация о тесте</h3>
+                    <h3 className="font-bold text-gray-800 mb-3">Тест туралы ақпарат</h3>
                     
                     <div className="space-y-3">
                       <div>
-                        <p className="text-sm text-gray-500">Дата проведения:</p>
+                        <p className="text-sm text-gray-500">Өткізілген күні:</p>
                         <p className="font-medium text-gray-800">
                           <FaCalendarAlt className="inline mr-2 text-blue-500" />
                           {formatDate(selectedTest.testDate)}
@@ -833,7 +835,7 @@ const MedicalTestsPage = () => {
                       </div>
                       
                       <div>
-                        <p className="text-sm text-gray-500">Дата создания записи:</p>
+                        <p className="text-sm text-gray-500">Жазба құрылған күні:</p>
                         <p className="font-medium text-gray-800">
                           {formatDate(selectedTest.createdAt)}
                         </p>
@@ -842,7 +844,7 @@ const MedicalTestsPage = () => {
                   </div>
                   
                   <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                    <h3 className="font-bold text-gray-800 mb-3">Прикрепленные файлы</h3>
+                    <h3 className="font-bold text-gray-800 mb-3">Тіркелген файлдар</h3>
                     
                     <div className="space-y-3">
                       {selectedTest.fileUrl && (
@@ -850,7 +852,7 @@ const MedicalTestsPage = () => {
                           onClick={() => handleDownloadFile(selectedTest.fileUrl, getFileNameFromUrl(selectedTest.fileUrl))}
                           className="w-full px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center justify-center"
                         >
-                          <FaFilePdf className="mr-2" /> Скачать документ
+                          <FaFilePdf className="mr-2" /> Құжатты жүктеу
                         </button>
                       )}
                       
@@ -859,12 +861,12 @@ const MedicalTestsPage = () => {
                           onClick={() => handleDownloadFile(selectedTest.imageUrl, getFileNameFromUrl(selectedTest.imageUrl))}
                           className="w-full px-4 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors flex items-center justify-center"
                         >
-                          <FaFileImage className="mr-2" /> Скачать снимок
+                          <FaFileImage className="mr-2" /> Суретті жүктеу
                         </button>
                       )}
                       
                       {!selectedTest.fileUrl && !selectedTest.imageUrl && (
-                        <p className="text-gray-500 text-center py-2">Нет прикрепленных файлов</p>
+                        <p className="text-gray-500 text-center py-2">Тіркелген файлдар жоқ</p>
                       )}
                     </div>
                   </div>
@@ -884,14 +886,14 @@ const MedicalTestsPage = () => {
                       }}
                       className="flex-1 px-4 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors flex items-center justify-center"
                     >
-                      <FaEdit className="mr-2" /> Создать похожий
+                      <FaEdit className="mr-2" /> Ұқсасын құру
                     </button>
                     
                     <button
                       onClick={() => handleDeleteTest(selectedTest.testId)}
                       className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors flex items-center justify-center"
                     >
-                      <FaTrash className="mr-2" /> Удалить
+                      <FaTrash className="mr-2" /> Жою
                     </button>
                   </div>
                 </div>

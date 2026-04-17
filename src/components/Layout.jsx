@@ -205,6 +205,10 @@ function Layout() {
                       <MdLocalHospital className="mr-2" />
                       DensBooking тізімі
                     </NavLink>
+                    {/* <NavLink to="/derm-AI" className={linkClass} onClick={() => setMenuOpen(false)}>
+                      <BiMessageSquareDetail className="mr-2" />
+                      DensAi
+                    </NavLink> */}
                     <NavLink to="/doctor-consultations" className={linkClass}>
                       <MdLocalHospital className="mr-2" />
                       Консультациялар
@@ -245,6 +249,10 @@ function Layout() {
                       <MdAudiotrack className="mr-2" />
                       Аудит логтары
                     </NavLink>
+                    <NavLink to="/messenger" className={linkClass}>
+                      <BiMessageSquareDetail className="mr-2" />
+                      DensTalk
+                    </NavLink>
                   </>
                 )}
 
@@ -276,8 +284,8 @@ function Layout() {
                             exit="exit"
                             className="absolute top-full left-0 mt-2 w-64 bg-white rounded-xl shadow-2xl py-2 z-50 border border-gray-100"
                           >
-                            <NavLink
-                              to="/derm-AI"
+                          <NavLink
+                              to="/densvision-patient"
                               className={dropdownLinkClass}
                               onClick={closeAllDropdowns}
                             >
@@ -287,6 +295,17 @@ function Layout() {
                                 <div className="text-xs text-gray-500">Жаңартылған нұсқа</div>
                               </div>
                             </NavLink>
+                            {/* <NavLink
+                              to="/derm-AI"
+                              className={dropdownLinkClass}
+                              onClick={closeAllDropdowns}
+                            >
+                              <FaRobot className="mr-3 text-purple-500" />
+                              <div>
+                                <div className="font-medium">DensVision</div>
+                                <div className="text-xs text-gray-500">Жаңартылған нұсқа</div>
+                              </div>
+                            </NavLink> */}
                             <NavLink
                               to="/ai"
                               className={dropdownLinkClass}

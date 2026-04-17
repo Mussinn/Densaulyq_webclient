@@ -26,18 +26,18 @@ const AdminPanel = () => {
   const authToken = useSelector((state) => state.token.token);
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
-  // Список ролей
+  // Рөлдер тізімі
   const roles = [
-    { id: 1, name: "ROLE_ADMIN", displayName: "Администратор" },
-    { id: 2, name: "ROLE_DOCTOR", displayName: "Врач" },
+    { id: 1, name: "ROLE_ADMIN", displayName: "Әкімші" },
+    { id: 2, name: "ROLE_DOCTOR", displayName: "Дәрігер" },
     { id: 3, name: "ROLE_USER", displayName: "Пациент" },
   ];
 
-  // Загрузка списка пользователей
+  // Қолданушылар тізімін жүктеу
   const fetchUsers = async () => {
     try {
       if (!authToken) {
-        throw new Error("Токен не найден. Пожалуйста, войдите снова.");
+        throw new Error("Токен табылмады. Қайта кіріңіз.");
       }
 
       const response = await fetch(`${API_BASE_URL}/api/v1/users/all`, {
@@ -51,16 +51,16 @@ const AdminPanel = () => {
       if (!response.ok) {
         const contentType = response.headers.get("content-type");
         const data = contentType?.includes("application/json") ? await response.json() : {};
-        throw new Error(data.error || `Ошибка HTTP: ${response.status}`);
+        throw new Error(data.error || `HTTP қатесі: ${response.status}`);
       }
 
       const data = await response.json();
       setUsers(data);
       setLoading(false);
     } catch (err) {
-      setError(err.message || "Ошибка при загрузке данных.");
+      setError(err.message || "Деректерді жүктеу кезінде қате.");
       setLoading(false);
-      console.error("AdminPanel error:", err);
+      console.error("AdminPanel қатесі:", err);
     }
   };
 
@@ -68,21 +68,20 @@ const AdminPanel = () => {
     fetchUsers();
   }, []);
 
-  // Обработчик выхода
+  // Шығу өңдеушісі
   const handleLogout = () => {
     localStorage.removeItem("token");
     navigate("/login");
   };
 
-  // Callback после успешного создания пользователя
+  // Қолданушы сәтті құрылғаннан кейінгі callback
   const handleUserCreated = (newUser) => {
-    // Перезагружаем список пользователей
     fetchUsers();
   };
 
-  // Обработчик удаления пользователя
+  // Қолданушыны жою өңдеушісі
   const handleDeleteUser = async (userId) => {
-    if (!window.confirm("Вы уверены, что хотите удалить этого пользователя?")) {
+    if (!window.confirm("Бұл қолданушыны жойғыңыз келетініне сенімдісіз бе?")) {
       return;
     }
 
@@ -98,30 +97,30 @@ const AdminPanel = () => {
       if (!response.ok) {
         const contentType = response.headers.get("content-type");
         const data = contentType?.includes("application/json") ? await response.json() : {};
-        throw new Error(data.error || `Ошибка HTTP: ${response.status}`);
+        throw new Error(data.error || `HTTP қатесі: ${response.status}`);
       }
 
       setUsers(users.filter((user) => user.userId !== userId));
       
-      // Показываем уведомление об успехе
+      // Жетістік туралы хабарлама көрсету
       const successMsg = document.createElement("div");
       successMsg.className = "fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center";
       successMsg.innerHTML = `
         <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
         </svg>
-        Пользователь успешно удален
+        Қолданушы сәтті жойылды
       `;
       document.body.appendChild(successMsg);
       setTimeout(() => successMsg.remove(), 3000);
       
     } catch (err) {
-      setError(err.message || "Ошибка при удалении пользователя.");
-      console.error("Delete user error:", err);
+      setError(err.message || "Қолданушыны жою кезінде қате.");
+      console.error("Қолданушыны жою қатесі:", err);
     }
   };
 
-  // Получить цвет роли
+  // Рөл түсін алу
   const getRoleColor = (roleName) => {
     switch (roleName) {
       case "ROLE_ADMIN":
@@ -138,7 +137,7 @@ const AdminPanel = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto p-4 md:p-6">
-        {/* Header */}
+        {/* Тақырып */}
         <div className="mb-8">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
             <div className="flex items-center mb-4 sm:mb-0">
@@ -146,8 +145,8 @@ const AdminPanel = () => {
                 <FaUsers className="text-indigo-600 text-2xl" />
               </div>
               <div>
-                <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Административная панель</h1>
-                <p className="text-gray-600 mt-2">Управление пользователями системы</p>
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Әкімшілік панель</h1>
+                <p className="text-gray-600 mt-2">Жүйе қолданушыларын басқару</p>
               </div>
             </div>
             <div className="flex items-center space-x-3">
@@ -156,20 +155,20 @@ const AdminPanel = () => {
                 className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl transition-colors flex items-center text-sm shadow-md hover:shadow-lg"
               >
                 <FaUserPlus className="mr-2" />
-                Добавить пользователя
+                Қолданушы қосу
               </button>
               <button
                 onClick={handleLogout}
                 className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2.5 rounded-xl transition-colors flex items-center text-sm"
               >
                 <FaSignOutAlt className="mr-2" />
-                Выйти
+                Шығу
               </button>
             </div>
           </div>
         </div>
 
-        {/* Error Message */}
+        {/* Қате туралы хабарлама */}
         {error && (
           <div className="mb-8">
             <div className="bg-gradient-to-r from-red-50 to-orange-50 border-l-4 border-red-500 text-red-700 p-4 rounded-lg">
@@ -189,14 +188,14 @@ const AdminPanel = () => {
           </div>
         )}
 
-        {/* Users Table */}
+        {/* Қолданушылар кестесі */}
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-200">
           <div className="p-6 border-b border-gray-200">
             <h2 className="text-xl font-bold text-gray-800 flex items-center">
               <FaUsers className="mr-3 text-indigo-600" />
-              Список пользователей
+              Қолданушылар тізімі
               <span className="ml-3 bg-gray-100 text-gray-600 text-sm font-normal px-3 py-1 rounded-full">
-                {users.length} {users.length === 1 ? 'пользователь' : users.length < 5 ? 'пользователя' : 'пользователей'}
+                {users.length} {users.length === 1 ? 'қолданушы' : users.length < 5 ? 'қолданушы' : 'қолданушы'}
               </span>
             </h2>
           </div>
@@ -204,7 +203,7 @@ const AdminPanel = () => {
           {loading ? (
             <div className="flex flex-col justify-center items-center py-20">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
-              <p className="text-gray-500">Загрузка пользователей...</p>
+              <p className="text-gray-500">Қолданушылар жүктелуде...</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -218,7 +217,7 @@ const AdminPanel = () => {
                       </div>
                     </th>
                     <th className="py-4 px-6 text-left text-sm font-medium text-gray-700 border-b min-w-[180px]">
-                      Пользователь
+                      Қолданушы
                     </th>
                     <th className="py-4 px-6 text-left text-sm font-medium text-gray-700 border-b min-w-[220px]">
                       <div className="flex items-center">
@@ -227,28 +226,28 @@ const AdminPanel = () => {
                       </div>
                     </th>
                     <th className="py-4 px-6 text-left text-sm font-medium text-gray-700 border-b min-w-[140px]">
-                      Имя
+                      Аты
                     </th>
                     <th className="py-4 px-6 text-left text-sm font-medium text-gray-700 border-b min-w-[140px]">
-                      Фамилия
+                      Тегі
                     </th>
                     <th className="py-4 px-6 text-left text-sm font-medium text-gray-700 border-b min-w-[160px]">
-                      Роли
+                      Рөлдер
                     </th>
                     <th className="py-4 px-6 text-left text-sm font-medium text-gray-700 border-b min-w-[180px]">
                       <div className="flex items-center">
                         <FaCalendarAlt className="mr-2 text-gray-400" />
-                        Создан
+                        Құрылған
                       </div>
                     </th>
                     <th className="py-4 px-6 text-left text-sm font-medium text-gray-700 border-b min-w-[180px]">
                       <div className="flex items-center">
                         <FaHistory className="mr-2 text-gray-400" />
-                        Обновлен
+                        Жаңартылған
                       </div>
                     </th>
                     <th className="py-4 px-6 text-left text-sm font-medium text-gray-700 border-b min-w-[120px]">
-                      Действия
+                      Әрекеттер
                     </th>
                   </tr>
                 </thead>
@@ -262,7 +261,7 @@ const AdminPanel = () => {
                         <div className="flex items-center">
                           <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center mr-3">
                             <span className="text-indigo-600 font-medium text-sm">
-                              {user.firstName?.charAt(0) || user.username?.charAt(0) || 'U'}
+                              {user.firstName?.charAt(0) || user.username?.charAt(0) || 'Қ'}
                             </span>
                           </div>
                           <div>
@@ -270,7 +269,7 @@ const AdminPanel = () => {
                             {user.online && (
                               <span className="inline-flex items-center text-xs text-green-600">
                                 <span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span>
-                                Online
+                                Желіде
                               </span>
                             )}
                           </div>
@@ -299,28 +298,28 @@ const AdminPanel = () => {
                       </td>
                       <td className="py-4 px-6">
                         <div className="text-sm text-gray-600">
-                          {new Date(user.createdAt).toLocaleDateString('ru-RU')}
+                          {new Date(user.createdAt).toLocaleDateString('kk-KZ')}
                         </div>
                         <div className="text-xs text-gray-500">
-                          {new Date(user.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(user.createdAt).toLocaleTimeString('kk-KZ', { hour: '2-digit', minute: '2-digit' })}
                         </div>
                       </td>
                       <td className="py-4 px-6">
                         <div className="text-sm text-gray-600">
-                          {new Date(user.updatedAt).toLocaleDateString('ru-RU')}
+                          {new Date(user.updatedAt).toLocaleDateString('kk-KZ')}
                         </div>
                         <div className="text-xs text-gray-500">
-                          {new Date(user.updatedAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(user.updatedAt).toLocaleTimeString('kk-KZ', { hour: '2-digit', minute: '2-digit' })}
                         </div>
                       </td>
                       <td className="py-4 px-6">
                         <button
                           onClick={() => handleDeleteUser(user.userId)}
                           className="bg-red-50 text-red-600 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-colors flex items-center text-sm"
-                          title="Удалить пользователя"
+                          title="Қолданушыны жою"
                         >
                           <FaTrash className="mr-2" />
-                          Удалить
+                          Жою
                         </button>
                       </td>
                     </tr>
@@ -335,22 +334,22 @@ const AdminPanel = () => {
               <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <FaUsers className="text-gray-400 text-3xl" />
               </div>
-              <h3 className="text-lg font-medium text-gray-700 mb-2">Пользователи не найдены</h3>
+              <h3 className="text-lg font-medium text-gray-700 mb-2">Қолданушылар табылмады</h3>
               <p className="text-gray-500 max-w-md mx-auto mb-6">
-                В системе пока нет пользователей. Добавьте первого пользователя.
+                Жүйеде әзірге қолданушылар жоқ. Бірінші қолданушыны қосыңыз.
               </p>
               <button
                 onClick={() => setShowModal(true)}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl transition-colors flex items-center mx-auto"
               >
                 <FaUserPlus className="mr-2" />
-                Добавить пользователя
+                Қолданушы қосу
               </button>
             </div>
           )}
         </div>
 
-        {/* Footer */}
+        {/* Төменгі деректеме */}
         <footer className="mt-8 pt-6 border-t border-gray-200">
           <div className="flex flex-col md:flex-row justify-between items-center">
             <div className="flex items-center mb-4 md:mb-0">
@@ -358,23 +357,23 @@ const AdminPanel = () => {
                 <FaUsers className="text-white" />
               </div>
               <div>
-                <p className="font-medium text-gray-700">Densaulyq Административная панель</p>
-                <p className="text-sm text-gray-500">Управление пользователями системы</p>
+                <p className="font-medium text-gray-700">Densaulyq Әкімшілік панель</p>
+                <p className="text-sm text-gray-500">Жүйе қолданушыларын басқару</p>
               </div>
             </div>
             <div className="text-center md:text-right">
               <p className="text-sm text-gray-500">
-                © {new Date().getFullYear()} Densaulyq | Всего пользователей: {users.length}
+                © {new Date().getFullYear()} Densaulyq | Барлық қолданушылар: {users.length}
               </p>
               <p className="text-xs text-gray-400 mt-1">
-                Только администраторы имеют доступ к этой панели
+                Бұл панельге тек әкімшілердің қолжетімділігі бар
               </p>
             </div>
           </div>
         </footer>
       </div>
 
-      {/* Модальное окно регистрации пользователя */}
+      {/* Қолданушыны тіркеу модальды терезесі */}
       <UserRegistrationModal
         showModal={showModal}
         setShowModal={setShowModal}
