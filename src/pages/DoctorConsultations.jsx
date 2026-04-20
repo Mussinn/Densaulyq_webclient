@@ -609,14 +609,14 @@ const DoctorConsultations = () => {
                           </>
                         )}
 
-                        {consultation.status === 'COMPLETED' && consultation.meetingUrl && (
+                        {/* {consultation.status === 'COMPLETED' && consultation.meetingUrl && (
                           <button
                             onClick={() => window.open(consultation.meetingUrl, '_blank')}
                             className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-sm font-medium"
                           >
                             <FaVideo className="mr-2 inline" /> Жазбаны ашу
                           </button>
-                        )}
+                        )} */}
 
                         {consultation.status === 'CANCELLED' && (
                           <div className="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium">

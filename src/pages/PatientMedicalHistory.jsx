@@ -709,20 +709,20 @@ const PatientMedicalHistory = () => {
             
             {selectedPatient && (
               <div className="flex gap-3 mt-4 md:mt-0">
-                <button
+                {/* <button
                   onClick={handleExportPDF}
                   className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 transition flex items-center shadow-md"
                 >
                   <FaDownload className="mr-2" />
                   PDF
-                </button>
-                <button
+                </button> */}
+                {/* <button
                   onClick={handlePrint}
                   className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition flex items-center shadow-md"
                 >
                   <FaPrint className="mr-2" />
                   Басып шығару
-                </button>
+                </button> */}
               </div>
             )}
           </div>

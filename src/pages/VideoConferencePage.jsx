@@ -26,26 +26,26 @@ const VideoConferencePage = () => {
   const fetchMeetings = async () => {
     // Mock данные для демонстрации
     setMeetings([
-      {
-        id: 1,
-        topic: "Науқас Петров туралы консилиум",
-        meetingUrl: "https://meet.jit.si/patient-petrov-a1b2c3d4",
-        roomId: "patient-petrov-a1b2c3d4",
-        date: "2024-01-15T10:00:00",
-        participants: ["dr.smith@med.com", "dr.jones@med.com"],
-        doctor: "Дәрігер Иванова А.С.",
-        status: "active"
-      },
-      {
-        id: 2,
-        topic: "Емдеуді талқылау",
-        meetingUrl: "https://meet.jit.si/treatment-discuss-e5f6g7h8",
-        roomId: "treatment-discuss-e5f6g7h8",
-        date: "2024-01-16T14:30:00",
-        participants: ["admin@densaulyq.kz"],
-        doctor: "Дәрігер Калиев М.Т.",
-        status: "upcoming"
-      },
+      // {
+      //   id: 1,
+      //   topic: "Науқас Петров туралы консилиум",
+      //   meetingUrl: "https://meet.jit.si/patient-petrov-a1b2c3d4",
+      //   roomId: "patient-petrov-a1b2c3d4",
+      //   date: "2024-01-15T10:00:00",
+      //   participants: ["dr.smith@med.com", "dr.jones@med.com"],
+      //   doctor: "Дәрігер Иванова А.С.",
+      //   status: "active"
+      // },
+      // {
+      //   id: 2,
+      //   topic: "Емдеуді талқылау",
+      //   meetingUrl: "https://meet.jit.si/treatment-discuss-e5f6g7h8",
+      //   roomId: "treatment-discuss-e5f6g7h8",
+      //   date: "2024-01-16T14:30:00",
+      //   participants: ["admin@densaulyq.kz"],
+      //   doctor: "Дәрігер Калиев М.Т.",
+      //   status: "upcoming"
+      // },
     ]);
   };
 
@@ -90,7 +90,7 @@ const VideoConferencePage = () => {
 
     } catch (err) {
       console.error("Кездесу құру қатесі:", err);
-      setError("Кездесу құру мүмкін болмады. Серверге қосылуды тексеріңіз.");
+      setError("Кездесу құру мүмкін болмады. Серверге қосылуды тексеріңіз.", err);
     } finally {
       setLoading(false);
     }
@@ -149,7 +149,7 @@ const VideoConferencePage = () => {
             <div>
               <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-2 flex items-center">
                 <GiVideoConference className="mr-3 text-emerald-600" />
-                Бейнеконсультация
+                Жылдам бейнеконсультация
               </h1>
               <p className="text-gray-600 max-w-3xl">
                 Дәрігерлермен қауіпсіз бейнеконсультация. Деректеріңіз шифрланған және қорғалған.

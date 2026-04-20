@@ -421,7 +421,7 @@ const DiagnosisPage = () => {
                         <option value="">Жазбаны таңдаңыз (міндетті емес)</option>
                         {medicalRecords.map((record) => (
                           <option key={record.recordId} value={record.recordId}>
-                            Жазба #{record.recordId} - {new Date(record.createdAt).toLocaleDateString('kk-KZ')}
+                            Медициналық карта - {new Date(record.createdAt).toLocaleDateString('kk-KZ')}
                           </option>
                         ))}
                       </select>

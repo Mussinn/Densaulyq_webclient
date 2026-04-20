@@ -557,12 +557,12 @@ const MedicalTestsPage = () => {
                         
                         {test.imageUrl && (
                           <>
-                            <button
+                            {/* <button
                               onClick={() => handleViewImage(test.imageUrl)}
                               className="px-4 py-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors flex items-center justify-center text-sm font-medium"
                             >
                               <FaEye className="mr-2" /> Суретті қарау
-                            </button>
+                            </button> */}
                             <button
                               onClick={() => handleDownloadFile(test.imageUrl, getFileNameFromUrl(test.imageUrl))}
                               className="px-4 py-2 bg-purple-500 text-white rounded-xl hover:bg-purple-600 transition-colors flex items-center justify-center text-sm font-medium"

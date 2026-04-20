@@ -358,7 +358,7 @@ const DoctorAppointments = () => {
         patientId: Number(selectedAppointment?.patientId) || 0,
         topic: `${selectedAppointment?.patientName} -мен кеңес`,
         description: 'Дәрігерлік кеңес',
-        scheduledTime: new Date().toISOString(),
+        // scheduledTime: new Date().toISOString(),
         durationMinutes: 30,
         patientEmail: cleanedEmail,
       }, {
@@ -1176,14 +1176,14 @@ const DoctorAppointments = () => {
                         </>
                       )}
 
-                      {meeting.status === 'COMPLETED' && meeting.meetingUrl && (
+                      {/* {meeting.status === 'COMPLETED' && meeting.meetingUrl && (
                         <button
                           onClick={() => window.open(meeting.meetingUrl, '_blank')}
                           className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-sm font-medium flex items-center"
                         >
                           <FaVideo className="mr-2" /> Жазбаны ашу
                         </button>
-                      )}
+                      )} */}
 
                       {meeting.status === 'CANCELLED' && (
                         <div className="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium">

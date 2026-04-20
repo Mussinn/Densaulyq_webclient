@@ -1176,7 +1176,7 @@ const OnlineBooking = () => {
                                       </div>
                                     </div>
                                     
-                                    <div className="ml-4 flex flex-col gap-2">
+                                    {/* <div className="ml-4 flex flex-col gap-2">
                                       {meetingStatus === 'active' && (
                                         <>
                                           <button
@@ -1215,7 +1215,7 @@ const OnlineBooking = () => {
                                           Аяқталды
                                         </div>
                                       )}
-                                    </div>
+                                    </div> */}
                                   </div>
                                 </div>
                               )}
