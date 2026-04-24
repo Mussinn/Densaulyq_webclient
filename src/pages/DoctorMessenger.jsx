@@ -23,10 +23,19 @@ import {
   FaUserMd,
   FaUserInjured,
   FaDownload,
-  FaSpinner
+  FaSpinner,
+  FaReply,
+  FaCheckCircle,
+  FaRegClock,
+  FaEllipsisV,
+  FaCopy,
+  FaTrash,
+  FaShare,
+  FaStar,
+  FaRegStar
 } from 'react-icons/fa';
 import { GiBrain, GiHealthNormal, GiMedicines } from 'react-icons/gi';
-import { MdHealthAndSafety, MdLocalHospital } from 'react-icons/md';
+import { MdHealthAndSafety, MdLocalHospital, MdMoreVert } from 'react-icons/md';
 import { format } from 'date-fns';
 import { kk } from 'date-fns/locale';
 
@@ -45,12 +54,17 @@ const DensTalk = () => {
   const [attachments, setAttachments] = useState([]);
   const [replyTo, setReplyTo] = useState(null);
   const [showChatList, setShowChatList] = useState(true);
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [showMessageMenu, setShowMessageMenu] = useState(false);
+  const [messageMenuPosition, setMessageMenuPosition] = useState({ x: 0, y: 0 });
   
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+  const messageMenuRef = useRef(null);
   
   const { token } = useSelector((state) => state.token);
   const currentUserId = useSelector((state) => state.auth?.user?.userId);
+  const currentUser = useSelector((state) => state.auth?.user);
 
   // ========== ФАЙЛДЫ ЖҮКТЕУ ФУНКЦИЯЛАРЫ (localhost:8080 үшін) ==========
 
@@ -71,11 +85,9 @@ const DensTalk = () => {
   // Толық URL құрастыру
   const getFullUrl = (url) => {
     if (!url) return null;
-    // Егер URL толық болса
     if (url.startsWith('http://') || url.startsWith('https://')) {
       return url;
     }
-    // Егер URL / арқылы басталса
     if (url.startsWith('/')) {
       return `${API_BASE_URL}${url}`;
     }
@@ -116,8 +128,6 @@ const DensTalk = () => {
     } catch (err) {
       console.error('Файлды жүктеу қатесі:', err);
       alert('Файлды жүктеу қатесі. Файлды жаңа қойында ашып көріңіз.');
-      
-      // Резервтік әдіс - жаңа қойында ашу
       window.open(fullUrl, '_blank');
     }
   };
@@ -127,7 +137,6 @@ const DensTalk = () => {
     if (!url) return;
     
     let fullUrl = getFullUrl(url);
-    // /files/ -> /files/view/ ауыстыру
     const viewUrl = fullUrl.replace('/files/', '/files/view/');
     console.log('Қарау URL:', viewUrl);
     window.open(viewUrl, '_blank');
@@ -148,6 +157,62 @@ const DensTalk = () => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  // ========== ИНИЦИАЛДАРДЫ АЛУ ФУНКЦИЯСЫ ==========
+  
+  // Инициалдарды дұрыс алу
+  const getInitials = (name, fallback = 'Қ') => {
+    if (!name || name === 'Қолданушы' || name === 'Unknown') return fallback;
+    
+    // Бос орындарды кетіру
+    const cleanName = name.trim();
+    
+    // Егер бірінші әріп бар болса
+    if (cleanName.length > 0) {
+      const firstChar = cleanName.charAt(0).toUpperCase();
+      // Тек әріп екенін тексеру
+      if (/[A-Za-zА-Яа-я]/.test(firstChar)) {
+        return firstChar;
+      }
+    }
+    
+    return fallback;
+  };
+
+  // Пайдаланушының атын алу (әртүрлі форматтардан)
+  const getUserDisplayName = (user) => {
+    if (!user) return 'Қолданушы';
+    
+    // Егер firstName және lastName бар болса
+    if (user.firstName) {
+      if (user.lastName) {
+        return `${user.firstName} ${user.lastName}`;
+      }
+      return user.firstName;
+    }
+    
+    // Егер name бар болса
+    if (user.name) return user.name;
+    
+    // Егер username бар болса
+    if (user.username) return user.username;
+    
+    // Егер email бар болса
+    if (user.email) return user.email.split('@')[0];
+    
+    return 'Қолданушы';
+  };
+
+  // Ағымдағы пайдаланушының инициалы
+  const getCurrentUserInitials = () => {
+    if (currentUser?.firstName) {
+      return currentUser.firstName.charAt(0).toUpperCase();
+    }
+    if (currentUser?.username) {
+      return currentUser.username.charAt(0).toUpperCase();
+    }
+    return 'С'; // 'Сіз'
   };
 
   // Анимация варианттары
@@ -197,13 +262,15 @@ const DensTalk = () => {
         .filter(user => user.userId !== currentUserId)
         .map(user => ({
           id: user.userId,
-          name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || 'Қолданушы',
+          name: getUserDisplayName(user),
+          fullName: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
           email: user.email || '',
           username: user.username || '',
           avatarColor: getAvatarColor(user.userId),
           online: user.online || false,
           roles: user.roles || [],
-          specialty: user.doctor?.specialty || user.specialty || ''
+          specialty: user.doctor?.specialty || user.specialty || '',
+          initials: getInitials(user.firstName || user.username || user.email)
         }));
       
       setUsersList(usersData);
@@ -349,7 +416,7 @@ const DensTalk = () => {
       'bg-gradient-to-br from-orange-500 to-amber-500',
       'bg-gradient-to-br from-green-500 to-emerald-500'
     ];
-    return colors[Math.abs(id || 0) % colors.length];
+    return colors[Math.abs((id || 0).toString().length) % colors.length];
   };
 
   const getUserRole = (roles) => {
@@ -374,6 +441,15 @@ const DensTalk = () => {
       return format(date, 'HH:mm', { locale: kk });
     } catch {
       return '--:--';
+    }
+  };
+
+  const formatFullMessageTime = (dateString) => {
+    try {
+      const date = new Date(dateString);
+      return format(date, 'dd MMMM yyyy, HH:mm', { locale: kk });
+    } catch {
+      return '';
     }
   };
 
@@ -408,6 +484,46 @@ const DensTalk = () => {
     setActiveChat(null);
     setShowChatList(true);
   };
+
+  const handleReply = (message) => {
+    setReplyTo(message);
+    setShowMessageMenu(false);
+  };
+
+  const handleCopyMessage = (message) => {
+    if (message.content) {
+      navigator.clipboard.writeText(message.content);
+      alert('Хабарлама көшірілді');
+    }
+    setShowMessageMenu(false);
+  };
+
+  const handleStarMessage = (message) => {
+    console.log('Маңызды деп белгілеу:', message.id);
+    setShowMessageMenu(false);
+  };
+
+  const handleMessageContextMenu = (e, message) => {
+    e.preventDefault();
+    setSelectedMessage(message);
+    setMessageMenuPosition({ x: e.clientX, y: e.clientY });
+    setShowMessageMenu(true);
+  };
+
+  const closeMessageMenu = () => {
+    setShowMessageMenu(false);
+    setSelectedMessage(null);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (messageMenuRef.current && !messageMenuRef.current.contains(e.target)) {
+        closeMessageMenu();
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
 
   const filteredChats = chats.filter(chat => {
     const searchLower = searchQuery.toLowerCase();
@@ -465,6 +581,47 @@ const DensTalk = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  const getMessageStatusIcon = (message) => {
+    if (message.senderId !== currentUserId) return null;
+    
+    if (message.readAt) {
+      return <FaCheckDouble className="text-blue-500" title="Оқылды" />;
+    }
+    if (message.deliveredAt) {
+      return <FaCheckDouble className="text-gray-400" title="Жеткізілді" />;
+    }
+    if (message.sentAt) {
+      return <FaCheck className="text-gray-400" title="Жіберілді" />;
+    }
+    return <FaRegClock className="text-gray-400" title="Күтуде" />;
+  };
+
+  const groupMessages = (messages) => {
+    const grouped = [];
+    let currentGroup = [];
+    
+    messages.forEach((msg, index) => {
+      const prevMsg = messages[index - 1];
+      
+      if (prevMsg && prevMsg.senderId === msg.senderId) {
+        currentGroup.push(msg);
+      } else {
+        if (currentGroup.length > 0) {
+          grouped.push(currentGroup);
+        }
+        currentGroup = [msg];
+      }
+    });
+    
+    if (currentGroup.length > 0) {
+      grouped.push(currentGroup);
+    }
+    
+    return grouped;
+  };
+
+  const messageGroups = groupMessages(messages);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-50 to-emerald-50 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
@@ -486,7 +643,6 @@ const DensTalk = () => {
               </p>
             </div>
             
-            {/* Ақпараттық панель */}
             <div className="flex flex-wrap gap-3">
               <div className="bg-white rounded-xl px-4 py-2 flex items-center shadow-sm border border-gray-200">
                 <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
@@ -499,7 +655,6 @@ const DensTalk = () => {
             </div>
           </div>
 
-          {/* Статистика */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
               <div className="flex items-center">
@@ -615,7 +770,7 @@ const DensTalk = () => {
                         <div className="flex items-center space-x-3">
                           <div className="relative flex-shrink-0">
                             <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${getAvatarColor(chat.participant?.id)} text-white font-medium text-lg shadow-md`}>
-                              {chat.participant?.name?.charAt(0) || 'Қ'}
+                              {getInitials(chat.participant?.name || chat.participant?.firstName)}
                             </div>
                             {chat.participant?.online && (
                               <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full animate-pulse"></div>
@@ -680,7 +835,7 @@ const DensTalk = () => {
                       </button>
                       <div className="flex items-center space-x-3">
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${getAvatarColor(activeChat.participant?.id)} text-white font-medium text-lg shadow-lg`}>
-                          {activeChat.participant?.name?.charAt(0) || 'Қ'}
+                          {getInitials(activeChat.participant?.name || activeChat.participant?.firstName)}
                         </div>
                         <div>
                           <h3 className="font-bold text-white text-base md:text-lg flex items-center">
@@ -727,102 +882,158 @@ const DensTalk = () => {
                       </div>
                     ) : (
                       <AnimatePresence>
-                        <div className="space-y-4">
-                          {messages.map((message) => (
-                            <motion.div
-                              key={message.id}
-                              variants={messageVariants}
-                              initial="hidden"
-                              animate="visible"
-                              exit="hidden"
-                              className={`flex ${message.senderId === currentUserId ? 'justify-end' : 'justify-start'}`}
-                            >
-                              <div className={`max-w-[70%] lg:max-w-[60%] ${message.senderId === currentUserId ? 'order-2' : 'order-1'}`}>
-                                {message.replyTo && (
-                                  <div className={`mb-2 p-3 rounded-lg ${
-                                    message.senderId === currentUserId 
-                                      ? 'bg-emerald-100 text-emerald-800' 
-                                      : 'bg-gray-200 text-gray-700'
-                                  }`}>
-                                    <div className="font-medium text-sm flex items-center">
-                                      <FaReply className="mr-2" size={12} />
-                                      {message.replyTo.senderId === currentUserId ? 'Сіз' : activeChat.participant?.name}
+                        <div className="space-y-6">
+                          {messageGroups.map((group, groupIndex) => {
+                            const isOwnGroup = group[0].senderId === currentUserId;
+                            const showAvatar = !isOwnGroup;
+                            
+                            return (
+                              <div key={groupIndex} className={`flex ${isOwnGroup ? 'justify-end' : 'justify-start'} mb-4`}>
+                                <div className={`flex items-end ${isOwnGroup ? 'flex-row-reverse' : 'flex-row'} max-w-[75%]`}>
+                                  {/* Аватар (тек басқа адамның хабарламалары үшін) */}
+                                  {showAvatar && (
+                                    <div className="flex-shrink-0 mr-2 mb-1">
+                                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${getAvatarColor(group[0].senderId)} text-white text-xs shadow-sm`}>
+                                        {getInitials(activeChat.participant?.name || activeChat.participant?.firstName)}
+                                      </div>
                                     </div>
-                                    <div className="truncate text-sm">
-                                      {message.replyTo.content || 'Тіркеме'}
-                                    </div>
-                                  </div>
-                                )}
-                                
-                                <div className={`rounded-2xl p-4 ${
-                                  message.senderId === currentUserId 
-                                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-br-none shadow-lg' 
-                                    : 'bg-white border border-gray-200 rounded-bl-none shadow-md'
-                                }`}>
-                                  {/* Тіркемелерді көрсету */}
-                                  {message.attachments && message.attachments.length > 0 && (
-                                    <div className="mb-3 space-y-2">
-                                      {message.attachments.map((attachment, idx) => (
-                                        <div key={idx} className="rounded-lg overflow-hidden bg-black/5">
-                                          {attachment.mimeType?.startsWith('image/') ? (
-                                            <div className="relative group">
-                                              <img 
-                                                src={getFullUrl(attachment.url)}
-                                                alt={attachment.name || 'Сурет'} 
-                                                className="max-w-full max-h-64 object-cover cursor-pointer hover:opacity-90 transition-opacity rounded-lg"
-                                                onClick={() => handleViewImage(attachment.url)}
-                                              />
-                                              <button
-                                                onClick={() => handleDownloadFile(attachment.url, attachment.name || 'сурет')}
-                                                className="absolute top-2 right-2 p-2 bg-black/50 hover:bg-black/70 rounded-lg text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                                              >
-                                                <FaDownload />
-                                              </button>
-                                            </div>
-                                          ) : (
-                                            <div className="flex items-center justify-between p-3 hover:bg-black/5 transition-colors">
-                                              <div className="flex items-center flex-1 min-w-0">
-                                                {getFileIcon(attachment.name, attachment.mimeType)}
-                                                <div className="ml-3 flex-1 min-w-0">
-                                                  <div className="font-medium truncate text-sm">
-                                                    {attachment.name || 'Файл'}
-                                                  </div>
-                                                  <div className="text-xs opacity-70">
-                                                    {formatFileSize(attachment.size)}
-                                                  </div>
-                                                </div>
+                                  )}
+                                  
+                                  <div className={`flex flex-col ${isOwnGroup ? 'items-end' : 'items-start'}`}>
+                                    {/* Хабарламалар тобы */}
+                                    <div className={`space-y-1 ${isOwnGroup ? 'items-end' : 'items-start'}`}>
+                                      {group.map((message, idx) => (
+                                        <motion.div
+                                          key={message.id}
+                                          variants={messageVariants}
+                                          initial="hidden"
+                                          animate="visible"
+                                          exit="hidden"
+                                          className="group relative"
+                                          onContextMenu={(e) => handleMessageContextMenu(e, message)}
+                                        >
+                                          {/* Жауаптау блогы */}
+                                          {message.replyTo && (
+                                            <div className={`mb-1 p-2 rounded-lg text-xs ${
+                                              isOwnGroup 
+                                                ? 'bg-emerald-500/30 text-emerald-100 rounded-br-none' 
+                                                : 'bg-gray-200 text-gray-700 rounded-bl-none'
+                                            }`}>
+                                              <div className="font-medium flex items-center gap-1">
+                                                <FaReply size={10} />
+                                                {message.replyTo.senderId === currentUserId ? 'Сіз' : activeChat.participant?.name}
                                               </div>
-                                              <button
-                                                onClick={() => handleDownloadFile(attachment.url, attachment.name)}
-                                                className="ml-3 p-2 hover:bg-black/10 rounded-lg transition-colors"
-                                              >
-                                                <FaDownload />
-                                              </button>
+                                              <div className="truncate max-w-[200px]">
+                                                {message.replyTo.content || 'Тіркеме'}
+                                              </div>
                                             </div>
                                           )}
-                                        </div>
+                                          
+                                          <div
+                                            className={`relative rounded-2xl p-3 transition-all ${
+                                              isOwnGroup 
+                                                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-br-none shadow-md' 
+                                                : 'bg-white border border-gray-200 rounded-bl-none shadow-sm hover:shadow-md'
+                                            }`}
+                                          >
+                                            {/* Тіркемелер */}
+                                            {message.attachments && message.attachments.length > 0 && (
+                                              <div className="mb-2 space-y-2">
+                                                {message.attachments.map((attachment, attIdx) => (
+                                                  <div key={attIdx} className="rounded-lg overflow-hidden bg-black/5">
+                                                    {attachment.mimeType?.startsWith('image/') ? (
+                                                      <div className="relative group/image">
+                                                        <img 
+                                                          src={getFullUrl(attachment.url)}
+                                                          alt={attachment.name || 'Сурет'} 
+                                                          className="max-w-full max-h-48 object-cover cursor-pointer hover:opacity-90 transition-opacity rounded-lg"
+                                                          onClick={() => handleViewImage(attachment.url)}
+                                                        />
+                                                        <button
+                                                          onClick={() => handleDownloadFile(attachment.url, attachment.name || 'сурет')}
+                                                          className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-black/70 rounded-lg text-white opacity-0 group-hover/image:opacity-100 transition-opacity"
+                                                        >
+                                                          <FaDownload size={12} />
+                                                        </button>
+                                                      </div>
+                                                    ) : (
+                                                      <div className="flex items-center justify-between p-2 hover:bg-black/5 transition-colors">
+                                                        <div className="flex items-center flex-1 min-w-0">
+                                                          {getFileIcon(attachment.name, attachment.mimeType)}
+                                                          <div className="ml-2 flex-1 min-w-0">
+                                                            <div className="font-medium truncate text-xs">
+                                                              {attachment.name || 'Файл'}
+                                                            </div>
+                                                            <div className="text-xs opacity-70">
+                                                              {formatFileSize(attachment.size)}
+                                                            </div>
+                                                          </div>
+                                                        </div>
+                                                        <button
+                                                          onClick={() => handleDownloadFile(attachment.url, attachment.name)}
+                                                          className="ml-2 p-1.5 hover:bg-black/10 rounded-lg transition-colors"
+                                                        >
+                                                          <FaDownload size={12} />
+                                                        </button>
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            )}
+                                            
+                                            {/* Хабарлама мәтіні */}
+                                            {message.content && (
+                                              <p className="whitespace-pre-wrap break-words leading-relaxed text-sm">
+                                                {message.content}
+                                              </p>
+                                            )}
+                                            
+                                            {/* Уақыт және статус */}
+                                            <div className={`flex items-center justify-end gap-1 mt-1 text-xs ${
+                                              isOwnGroup ? 'text-emerald-200' : 'text-gray-400'
+                                            }`}>
+                                              <span className="text-[10px]">
+                                                {formatMessageTime(message.createdAt)}
+                                              </span>
+                                              {getMessageStatusIcon(message)}
+                                            </div>
+                                            
+                                            {/* Хабарлама әрекеттері (әдепкіде көрінбейді, курсор тигізгенде көрінеді) */}
+                                            <div className={`absolute top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity ${
+                                              isOwnGroup ? '-left-16' : '-right-16'
+                                            }`}>
+                                              <button
+                                                onClick={() => handleReply(message)}
+                                                className="p-1.5 bg-white rounded-full shadow-md hover:bg-gray-100 transition-colors text-gray-600"
+                                                title="Жауап беру"
+                                              >
+                                                <FaReply size={10} />
+                                              </button>
+                                              <button
+                                                onClick={() => handleStarMessage(message)}
+                                                className="p-1.5 bg-white rounded-full shadow-md hover:bg-gray-100 transition-colors text-gray-600"
+                                                title="Маңызды деп белгілеу"
+                                              >
+                                                <FaRegStar size={10} />
+                                              </button>
+                                              <button
+                                                onClick={() => handleCopyMessage(message)}
+                                                className="p-1.5 bg-white rounded-full shadow-md hover:bg-gray-100 transition-colors text-gray-600"
+                                                title="Көшіру"
+                                              >
+                                                <FaCopy size={10} />
+                                              </button>
+                                            </div>
+                                          </div>
+                                        </motion.div>
                                       ))}
                                     </div>
-                                  )}
-                                  
-                                  {message.content && (
-                                    <p className="whitespace-pre-wrap break-words leading-relaxed">{message.content}</p>
-                                  )}
-                                  
-                                  <div className={`flex items-center justify-end mt-2 text-sm ${
-                                    message.senderId === currentUserId ? 'text-emerald-200' : 'text-gray-500'
-                                  }`}>
-                                    <span>{formatMessageTime(message.createdAt)}</span>
-                                    {message.senderId === currentUserId && (
-                                      <span className="ml-2">
-                                        {message.readAt ? <FaCheckDouble /> : <FaCheck />}
-                                      </span>
-                                    )}
                                   </div>
                                 </div>
                               </div>
-                            </motion.div>
-                          ))}
+                            );
+                          })}
                           <div ref={messagesEndRef} />
                         </div>
                       </AnimatePresence>
@@ -844,7 +1055,7 @@ const DensTalk = () => {
                               <FaReply className="mr-2" />
                               Хабарламаға жауап
                             </div>
-                            <div className="text-emerald-800 truncate">
+                            <div className="text-emerald-800 truncate text-sm">
                               {replyTo.content || 'Тіркеме'}
                             </div>
                           </div>
@@ -870,7 +1081,7 @@ const DensTalk = () => {
                       >
                         <div className="flex items-center flex-wrap gap-2">
                           {attachments.map((file, index) => (
-                            <div key={index} className="flex items-center bg-white border rounded-lg p-3 shadow-sm">
+                            <div key={index} className="flex items-center bg-white border rounded-lg p-2 shadow-sm">
                               {file.type.startsWith('image/') ? (
                                 <FaImage className="text-emerald-500 mr-2" />
                               ) : (
@@ -900,7 +1111,7 @@ const DensTalk = () => {
                           value={newMessage}
                           onChange={(e) => setNewMessage(e.target.value)}
                           placeholder="Хабарлама жазыңыз..."
-                          className="w-full bg-transparent border-none focus:outline-none resize-none py-3 px-4 max-h-32 text-gray-700"
+                          className="w-full bg-transparent border-none focus:outline-none resize-none py-3 px-4 max-h-32 text-gray-700 text-sm"
                           rows={1}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' && !e.shiftKey) {
@@ -932,7 +1143,7 @@ const DensTalk = () => {
                             </button>
                           </div>
                           
-                          <div className="text-sm text-gray-500">
+                          <div className="text-xs text-gray-500">
                             {newMessage.length}/2000
                           </div>
                         </div>
@@ -980,6 +1191,50 @@ const DensTalk = () => {
           </div>
         </div>
       </div>
+
+      {/* Хабарлама әрекеттері мәзірі */}
+      <AnimatePresence>
+        {showMessageMenu && selectedMessage && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            ref={messageMenuRef}
+            className="fixed z-50 bg-white rounded-xl shadow-xl border border-gray-200 py-2 min-w-[160px]"
+            style={{ top: messageMenuPosition.y, left: messageMenuPosition.x }}
+          >
+            <button
+              onClick={() => handleReply(selectedMessage)}
+              className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-3 transition-colors"
+            >
+              <FaReply className="text-emerald-600" />
+              Жауап беру
+            </button>
+            <button
+              onClick={() => handleCopyMessage(selectedMessage)}
+              className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-3 transition-colors"
+            >
+              <FaCopy className="text-blue-600" />
+              Көшіру
+            </button>
+            <button
+              onClick={() => handleStarMessage(selectedMessage)}
+              className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-3 transition-colors"
+            >
+              <FaRegStar className="text-yellow-600" />
+              Маңызды деп белгілеу
+            </button>
+            {selectedMessage.senderId === currentUserId && (
+              <button
+                className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors"
+              >
+                <FaTrash />
+                Жою
+              </button>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Жаңа чат модальды терезесі */}
       <AnimatePresence>
@@ -1037,7 +1292,7 @@ const DensTalk = () => {
                       >
                         <div className="flex items-center space-x-4">
                           <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${user.avatarColor} text-white font-medium text-xl shadow-md`}>
-                            {user.name.charAt(0)}
+                            {user.initials}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between">
@@ -1085,7 +1340,6 @@ const DensTalk = () => {
         )}
       </AnimatePresence>
 
-      {/* Скроллбар стильдері */}
       <style jsx>{`
         ::-webkit-scrollbar {
           width: 6px;
@@ -1108,21 +1362,5 @@ const DensTalk = () => {
     </div>
   );
 };
-
-// Жауап иконкасына арналған компонент
-const FaReply = (props) => (
-  <svg 
-    {...props}
-    stroke="currentColor" 
-    fill="currentColor" 
-    strokeWidth="0" 
-    viewBox="0 0 24 24" 
-    height="1em" 
-    width="1em" 
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"></path>
-  </svg>
-);
 
 export default DensTalk;

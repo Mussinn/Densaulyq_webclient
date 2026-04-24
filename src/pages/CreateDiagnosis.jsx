@@ -1,9 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import api from '../../utils/api';
 
 const DiagnosisPage = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  
+  // Получаем параметры из URL
+  const patientIdFromUrl = searchParams.get('patientId');
+  const appointmentIdFromUrl = searchParams.get('appointmentId');
+  const patientNameFromUrl = searchParams.get('patientName');
+  
   const [patients, setPatients] = useState([]);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [medicalRecords, setMedicalRecords] = useState([]);
@@ -67,6 +76,35 @@ const DiagnosisPage = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       setPatients(response.data);
+      
+      // Если есть patientId из URL, автоматически выбрать пациента
+      if (patientIdFromUrl && response.data.length > 0) {
+        const patient = response.data.find(p => p.patientId === Number(patientIdFromUrl));
+        if (patient) {
+          setSelectedPatient(patient);
+          setDiagnosisForm(prev => ({
+            ...prev,
+            patientId: patientIdFromUrl,
+          }));
+          await fetchMedicalRecords(patientIdFromUrl);
+          await fetchPatientAppointments(patientIdFromUrl);
+          
+          // Если есть appointmentId, автоматически выбрать его
+          if (appointmentIdFromUrl) {
+            setTimeout(() => {
+              const appointmentExists = patientAppointments.some(
+                app => app.appointmentId === Number(appointmentIdFromUrl)
+              );
+              if (appointmentExists) {
+                setPrescriptionForm(prev => ({
+                  ...prev,
+                  appointmentId: appointmentIdFromUrl,
+                }));
+              }
+            }, 1000);
+          }
+        }
+      }
     } catch (err) {
       setError('Науқастарды жүктеу қатесі: ' + (err.response?.data?.message || err.message));
     }
@@ -100,6 +138,19 @@ const DiagnosisPage = () => {
       );
       
       setPatientAppointments(completedAppointments);
+      
+      // Если есть appointmentId из URL, автоматически выбрать его
+      if (appointmentIdFromUrl && completedAppointments.length > 0) {
+        const appointment = completedAppointments.find(
+          app => app.appointmentId === Number(appointmentIdFromUrl)
+        );
+        if (appointment) {
+          setPrescriptionForm(prev => ({
+            ...prev,
+            appointmentId: appointmentIdFromUrl,
+          }));
+        }
+      }
     } catch (err) {
       console.error('Кездесулерді жүктеу қатесі:', err);
       setPatientAppointments([]);
@@ -300,13 +351,11 @@ const DiagnosisPage = () => {
   // Пропуск создания рецепта
   const skipPrescription = () => {
     setSuccess('Диагноз сәтті жасалды! Рецепт қосылмады.');
-    resetForms();
+    setTimeout(() => {
+      resetForms();
+      navigate('/doctor/appointments'); // Возврат на страницу с записями
+    }, 2000);
   };
-
-  // Загрузка пациентов при монтировании компонента
-  useEffect(() => {
-    fetchPatients();
-  }, []);
 
   // Обработка выбора пациента
   const handlePatientSelect = async (patientId) => {
@@ -321,10 +370,28 @@ const DiagnosisPage = () => {
     await fetchPatientAppointments(patientId);
   };
 
+  // Загрузка пациентов при монтировании компонента
+  useEffect(() => {
+    fetchPatients();
+  }, [token]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100">
+      {/* Кнопка возврата */}
+      <div className="max-w-7xl mx-auto px-4 pt-6">
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center text-gray-600 hover:text-gray-800 transition-colors mb-4"
+        >
+          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Артқа қайту
+        </button>
+      </div>
+
       <motion.section
-        className="w-full px-4 sm:px-6 lg:px-8 py-8 max-w-7xl mx-auto"
+        className="w-full px-4 sm:px-6 lg:px-8 py-4 pb-8 max-w-7xl mx-auto"
         initial={{ opacity: 0, y: 50 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
@@ -336,6 +403,11 @@ const DiagnosisPage = () => {
           <p className="text-center text-gray-600">
             Науқасқа диагноз қою және рецепт беру
           </p>
+          {patientNameFromUrl && (
+            <div className="text-center mt-2 text-blue-600 font-medium">
+              Науқас: {decodeURIComponent(patientNameFromUrl)}
+            </div>
+          )}
         </div>
 
         {/* Сообщения об ошибках/успехе */}
@@ -674,7 +746,7 @@ const DiagnosisPage = () => {
                         <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
                       </svg>
                       <span className="text-gray-700">
-                        {new Date(selectedPatient.dateOfBirth).toLocaleDateString('kk-KZ')}
+                        {selectedPatient.dateOfBirth ? new Date(selectedPatient.dateOfBirth).toLocaleDateString('kk-KZ') : 'Көрсетілмеген'}
                       </span>
                     </div>
                   </div>

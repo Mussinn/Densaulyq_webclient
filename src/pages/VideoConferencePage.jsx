@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import api from "../../utils/api";
 import { useSelector } from "react-redux";
 import { FaVideo, FaCopy, FaCalendarAlt, FaUsers, FaUserMd, FaShieldAlt } from "react-icons/fa";
 import { GiNetworkBars, GiVideoConference } from "react-icons/gi";
@@ -16,37 +15,27 @@ const VideoConferencePage = () => {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   
-  const { token, user: userData } = useSelector((state) => state.token);
+  const { user: userData } = useSelector((state) => state.token);
 
-  // Получение списка встреч
+  // Загрузка сохраненных встреч из localStorage
   useEffect(() => {
-    fetchMeetings();
+    const savedMeetings = localStorage.getItem('video_meetings');
+    if (savedMeetings) {
+      setMeetings(JSON.parse(savedMeetings));
+    }
   }, []);
 
-  const fetchMeetings = async () => {
-    // Mock данные для демонстрации
-    setMeetings([
-      // {
-      //   id: 1,
-      //   topic: "Науқас Петров туралы консилиум",
-      //   meetingUrl: "https://meet.jit.si/patient-petrov-a1b2c3d4",
-      //   roomId: "patient-petrov-a1b2c3d4",
-      //   date: "2024-01-15T10:00:00",
-      //   participants: ["dr.smith@med.com", "dr.jones@med.com"],
-      //   doctor: "Дәрігер Иванова А.С.",
-      //   status: "active"
-      // },
-      // {
-      //   id: 2,
-      //   topic: "Емдеуді талқылау",
-      //   meetingUrl: "https://meet.jit.si/treatment-discuss-e5f6g7h8",
-      //   roomId: "treatment-discuss-e5f6g7h8",
-      //   date: "2024-01-16T14:30:00",
-      //   participants: ["admin@densaulyq.kz"],
-      //   doctor: "Дәрігер Калиев М.Т.",
-      //   status: "upcoming"
-      // },
-    ]);
+  // Сохранение встреч в localStorage
+  useEffect(() => {
+    if (meetings.length > 0) {
+      localStorage.setItem('video_meetings', JSON.stringify(meetings));
+    }
+  }, [meetings]);
+
+  // Генерация уникальной ссылки для Jitsi Meet
+  const generateMeetingLink = () => {
+    const roomId = `MedicalConsult_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+    return `https://meet.jit.si/${roomId}`;
   };
 
   const handleCreateMeeting = async (e) => {
@@ -56,30 +45,26 @@ const VideoConferencePage = () => {
     setSuccess("");
 
     try {
-      const params = newMeeting.topic 
-        ? { topic: newMeeting.topic } 
-        : {};
+      // Генерируем ссылку без бэкенда
+      const meetingUrl = generateMeetingLink();
+      const roomId = meetingUrl.split('/').pop();
       
-      const response = await api.get("/create-meeting", { params });
-      const meetingData = response.data;
-
-      // Сохраняем встречу в состояние
       const newMeetingObj = {
         id: Date.now(),
         topic: newMeeting.topic || `${new Date().toLocaleDateString('kk-KZ')} кездесуі`,
-        meetingUrl: meetingData.meetingUrl,
-        roomId: meetingData.roomId,
+        meetingUrl: meetingUrl,
+        roomId: roomId,
         date: new Date().toISOString(),
         participants: newMeeting.participants 
-          ? newMeeting.participants.split(',').map(email => email.trim())
+          ? newMeeting.participants.split(',').map(email => email.trim()).filter(email => email)
           : [],
         description: newMeeting.description,
-        doctor: userData ? `${userData.firstName} ${userData.lastName}` : "Дәрігер",
+        doctor: userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || "Дәрігер" : "Дәрігер",
         status: "active"
       };
 
-      setMeetings([newMeetingObj, ...meetings]);
-      setSuccess(`Кездесу құрылды! Сілтеме: ${meetingData.meetingUrl}`);
+      setMeetings(prevMeetings => [newMeetingObj, ...prevMeetings]);
+      setSuccess(`Кездесу құрылды! Сілтеме: ${meetingUrl}`);
       
       // Сбрасываем форму
       setNewMeeting({
@@ -90,7 +75,7 @@ const VideoConferencePage = () => {
 
     } catch (err) {
       console.error("Кездесу құру қатесі:", err);
-      setError("Кездесу құру мүмкін болмады. Серверге қосылуды тексеріңіз.", err);
+      setError("Кездесу құру мүмкін болмады. Қайталап көріңіз.");
     } finally {
       setLoading(false);
     }
@@ -104,6 +89,14 @@ const VideoConferencePage = () => {
 
   const joinMeeting = (meetingUrl) => {
     window.open(meetingUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const deleteMeeting = (id) => {
+    if (window.confirm("Бұл кездесуді жою керек пе?")) {
+      setMeetings(meetings.filter(meeting => meeting.id !== id));
+      setSuccess("Кездесу жойылды!");
+      setTimeout(() => setSuccess(""), 3000);
+    }
   };
 
   const formatDate = (dateString) => {
@@ -171,8 +164,8 @@ const VideoConferencePage = () => {
                   <FaVideo className="text-blue-600 text-xl" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Бүгінгі кездесулер</p>
-                  <p className="text-2xl font-bold text-gray-800">2</p>
+                  <p className="text-sm text-gray-500">Барлық кездесулер</p>
+                  <p className="text-2xl font-bold text-gray-800">{meetings.length}</p>
                 </div>
               </div>
             </div>
@@ -183,8 +176,10 @@ const VideoConferencePage = () => {
                   <FaCalendarAlt className="text-emerald-600 text-xl" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Жоспарланған</p>
-                  <p className="text-2xl font-bold text-gray-800">5</p>
+                  <p className="text-sm text-gray-500">Бүгінгі</p>
+                  <p className="text-2xl font-bold text-gray-800">
+                    {meetings.filter(m => new Date(m.date).toDateString() === new Date().toDateString()).length}
+                  </p>
                 </div>
               </div>
             </div>
@@ -196,7 +191,9 @@ const VideoConferencePage = () => {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Қатысушылар</p>
-                  <p className="text-2xl font-bold text-gray-800">8</p>
+                  <p className="text-2xl font-bold text-gray-800">
+                    {meetings.reduce((sum, m) => sum + m.participants.length, 0)}
+                  </p>
                 </div>
               </div>
             </div>
@@ -207,8 +204,10 @@ const VideoConferencePage = () => {
                   <FaUserMd className="text-amber-600 text-xl" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Дәрігерлер</p>
-                  <p className="text-2xl font-bold text-gray-800">3</p>
+                  <p className="text-sm text-gray-500">Белсенді</p>
+                  <p className="text-2xl font-bold text-gray-800">
+                    {meetings.filter(m => m.status === 'active').length}
+                  </p>
                 </div>
               </div>
             </div>
@@ -222,7 +221,6 @@ const VideoConferencePage = () => {
               className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden mb-6"
               variants={cardVariants}
             >
-              {/* Жаңа кездесу құру формасы */}
               <div className="p-6 border-b border-gray-100">
                 <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
                   <div className="w-10 h-10 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center mr-3">
@@ -278,7 +276,7 @@ const VideoConferencePage = () => {
                       placeholder="dariyer@densaulyq.kz, науқас@gmail.com"
                     />
                     <p className="text-xs text-gray-500 mt-2">
-                      Барлық қатысушыларға кездесу сілтемесі жіберіледі
+                      Барлық қатысушыларға кездесу сілтемесін жіберіңіз
                     </p>
                   </div>
 
@@ -389,7 +387,6 @@ const VideoConferencePage = () => {
                     >
                       <motion.div variants={bounceVariants}>
                         <div className="p-6">
-                          {/* Кездесу атауы және статусы */}
                           <div className="flex justify-between items-start mb-4">
                             <div className="flex-1">
                               <h3 className="text-lg font-bold text-gray-800 pr-4">
@@ -402,23 +399,32 @@ const VideoConferencePage = () => {
                                 </p>
                               )}
                             </div>
-                            <span className={`px-3 py-1 text-xs font-medium rounded-full ${
-                              meeting.status === 'active' 
-                                ? 'bg-emerald-100 text-emerald-700' 
-                                : 'bg-blue-100 text-blue-700'
-                            }`}>
-                              {meeting.status === 'active' ? 'Белсенді' : 'Жоспарланған'}
-                            </span>
+                            <div className="flex gap-2">
+                              <span className={`px-3 py-1 text-xs font-medium rounded-full ${
+                                meeting.status === 'active' 
+                                  ? 'bg-emerald-100 text-emerald-700' 
+                                  : 'bg-blue-100 text-blue-700'
+                              }`}>
+                                {meeting.status === 'active' ? 'Белсенді' : 'Жоспарланған'}
+                              </span>
+                              <button
+                                onClick={() => deleteMeeting(meeting.id)}
+                                className="text-red-400 hover:text-red-600 transition"
+                                title="Жою"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </div>
                           </div>
 
-                          {/* Сипаттама */}
                           {meeting.description && (
-                            <p className="text-gray-600 mb-5 text-sm line-clamp-2">
+                            <p className="text-gray-600 mb-5 text-sm">
                               {meeting.description}
                             </p>
                           )}
 
-                          {/* Кездесу мәліметтері */}
                           <div className="space-y-3 mb-6">
                             <div className="flex items-center text-gray-500">
                               <svg className="w-4 h-4 mr-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -435,7 +441,6 @@ const VideoConferencePage = () => {
                             )}
                           </div>
 
-                          {/* Әрекет түймелері */}
                           <div className="flex flex-col sm:flex-row gap-3">
                             <button
                               onClick={() => joinMeeting(meeting.meetingUrl)}
@@ -457,7 +462,6 @@ const VideoConferencePage = () => {
                             </button>
                           </div>
 
-                          {/* Сілтеме */}
                           <div className="mt-5 pt-5 border-t border-gray-100">
                             <p className="text-xs text-gray-500 mb-2">Кездесу сілтемесі:</p>
                             <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg break-all">
@@ -475,7 +479,6 @@ const VideoConferencePage = () => {
 
           {/* Оң жақ баған - Ақпарат және нұсқаулар */}
           <div className="space-y-6">
-            {/* Жедел кездесу */}
             <motion.div 
               variants={cardVariants}
               className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-6 border border-emerald-200 shadow-sm"
@@ -508,7 +511,6 @@ const VideoConferencePage = () => {
               </button>
             </motion.div>
 
-            {/* Инструкция */}
             <motion.div 
               variants={cardVariants}
               className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200"
@@ -554,7 +556,6 @@ const VideoConferencePage = () => {
               </div>
             </motion.div>
 
-            {/* Қауіпсіздік ақпараты */}
             <motion.div 
               variants={cardVariants}
               className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200"
@@ -597,7 +598,6 @@ const VideoConferencePage = () => {
               </div>
             </motion.div>
 
-            {/* Жедел жәрдем */}
             <motion.div 
               variants={cardVariants}
               className="bg-gradient-to-br from-red-50 to-orange-50 rounded-2xl p-6 border border-red-200 shadow-sm"

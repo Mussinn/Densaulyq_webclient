@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { 
   FaHistory, 
   FaFileMedical, 
@@ -26,13 +27,16 @@ import {
   FaLock,
   FaLockOpen,
   FaDiagnoses,
-  FaEye
+  FaEye,
+  FaChevronDown,
+  FaChevronUp
 } from 'react-icons/fa';
 import { GiHealthPotion, GiMedicalPack } from 'react-icons/gi';
 import { MdHealthAndSafety, MdAccessTimeFilled, MdEmail, MdLocationOn } from 'react-icons/md';
 import api from '../../utils/api';
 
 function PersonalProfile() {
+  const navigate = useNavigate();
   const { token } = useSelector((state) => state.token);
   const [activeTab, setActiveTab] = useState('appointments');
   const [loading, setLoading] = useState(false);
@@ -43,19 +47,14 @@ function PersonalProfile() {
   const [labResults, setLabResults] = useState([]);
   const [loadingLabResults, setLoadingLabResults] = useState(false);
   
+  // Для раскрытия полного текста диагноза
+  const [expandedDiagnosisId, setExpandedDiagnosisId] = useState(null);
+  
   // Для модального окна деталей кездесу
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [appointmentDetails, setAppointmentDetails] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  
-  // Для модального окна расшифровки диагноза
-  const [showDecryptModal, setShowDecryptModal] = useState(false);
-  const [selectedDiagnosis, setSelectedDiagnosis] = useState(null);
-  const [decryptionKey, setDecryptionKey] = useState('');
-  const [decryptedDiagnosis, setDecryptedDiagnosis] = useState('');
-  const [decrypting, setDecrypting] = useState(false);
-  const [decryptError, setDecryptError] = useState('');
   
   const [stats, setStats] = useState({
     totalAppointments: 0,
@@ -185,6 +184,20 @@ function PersonalProfile() {
     await fetchAppointmentDetails(appointment.appointmentId);
   };
 
+  // Перенаправление на страницу просмотра диагноза
+  const handleViewDiagnosis = (diagnosisId) => {
+    navigate(`/diagnosis/view`);
+  };
+
+  // Переключение раскрытия полного текста диагноза
+  const toggleExpandDiagnosis = (diagnosisId) => {
+    if (expandedDiagnosisId === diagnosisId) {
+      setExpandedDiagnosisId(null);
+    } else {
+      setExpandedDiagnosisId(diagnosisId);
+    }
+  };
+
   // Функция для скачивания файлов (как в MedicalTestsPage)
   const handleDownloadFile = async (url, filename) => {
     if (!url) {
@@ -224,54 +237,6 @@ function PersonalProfile() {
   const handleViewImage = (url) => {
     if (!url) return;
     window.open(url, '_blank');
-  };
-
-  // Открытие модального окна расшифровки диагноза
-  const handleDecryptDiagnosis = (diagnosis) => {
-    setSelectedDiagnosis(diagnosis);
-    setDecryptionKey('');
-    setDecryptedDiagnosis('');
-    setDecryptError('');
-    setShowDecryptModal(true);
-  };
-
-  // Функция расшифровки диагноза
-  const handleDecryptSubmit = async () => {
-    if (!decryptionKey.trim()) {
-      setDecryptError('Шифрлау кілтін енгізіңіз');
-      return;
-    }
-
-    setDecrypting(true);
-    setDecryptError('');
-
-    try {
-      // Отправляем запрос на расшифровку
-      const response = await api.post('/api/v1/diagnosis/decrypt', {
-        diagnosisId: selectedDiagnosis.diagnosisId,
-        encryptionKey: decryptionKey
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      setDecryptedDiagnosis(response.data.decryptedText || response.data.diagnosis);
-      
-    } catch (err) {
-      console.error('Диагнозды шешу қатесі:', err);
-      setDecryptError(err.response?.data?.message || 'Диагнозды шешу мүмкін болмады. Кілт дұрыс емес.');
-    } finally {
-      setDecrypting(false);
-    }
-  };
-
-  // Закрытие модального окна расшифровки
-  const closeDecryptModal = () => {
-    setShowDecryptModal(false);
-    setSelectedDiagnosis(null);
-    setDecryptionKey('');
-    setDecryptedDiagnosis('');
-    setDecryptError('');
-    setDecrypting(false);
   };
 
   const fetchData = async () => {
@@ -509,93 +474,119 @@ function PersonalProfile() {
         </div>
 
         <div className="space-y-4">
-          {medicalHistory.map((diagnosis) => (
-            <div
-              key={diagnosis.diagnosisId}
-              className={`border-2 rounded-xl overflow-hidden ${
-                isAIDiagnosis(diagnosis.diagnosis)
-                  ? 'border-purple-300 bg-gradient-to-r from-purple-50 to-pink-50'
-                  : 'border-indigo-200 bg-white'
-              }`}
-            >
-              <div className="p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center">
-                    <div className={`p-3 rounded-xl mr-3 ${
-                      isAIDiagnosis(diagnosis.diagnosis)
-                        ? 'bg-gradient-to-r from-purple-500 to-pink-500'
-                        : 'bg-indigo-600'
-                    }`}>
-                      {isAIDiagnosis(diagnosis.diagnosis) ? (
-                        <span className="text-white text-2xl">🤖</span>
-                      ) : (
-                        <FaStethoscope className="text-white text-xl" />
-                      )}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h5 className="font-bold text-gray-800 text-lg">
-                          🩺 Диагноз №{diagnosis.diagnosisId}
-                        </h5>
-                        {isAIDiagnosis(diagnosis.diagnosis) && (
-                          <span className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs px-3 py-1 rounded-full font-bold">
-                            🤖 AI Диагноз
-                          </span>
+          {medicalHistory.map((diagnosis) => {
+            const isExpanded = expandedDiagnosisId === diagnosis.diagnosisId;
+            const diagnosisText = diagnosis.diagnosis || '';
+            const shortText = diagnosisText.length > 200 ? diagnosisText.substring(0, 200) + '...' : diagnosisText;
+            
+            return (
+              <div
+                key={diagnosis.diagnosisId}
+                className={`border-2 rounded-xl overflow-hidden ${
+                  isAIDiagnosis(diagnosis.diagnosis)
+                    ? 'border-purple-300 bg-gradient-to-r from-purple-50 to-pink-50'
+                    : 'border-indigo-200 bg-white'
+                }`}
+              >
+                <div className="p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center">
+                      <div className={`p-3 rounded-xl mr-3 ${
+                        isAIDiagnosis(diagnosis.diagnosis)
+                          ? 'bg-gradient-to-r from-purple-500 to-pink-500'
+                          : 'bg-indigo-600'
+                      }`}>
+                        {isAIDiagnosis(diagnosis.diagnosis) ? (
+                          <span className="text-white text-2xl">🤖</span>
+                        ) : (
+                          <FaStethoscope className="text-white text-xl" />
                         )}
                       </div>
-                      <p className="text-sm text-gray-600 mt-1">
-                        📅 {formatDateShort(diagnosis.diagnosisDate)}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <FaLock className="text-gray-400 text-sm" />
-                    <span className="text-xs text-gray-500">Шифрленген</span>
-                  </div>
-                </div>
-
-                <div className={`p-4 rounded-xl mb-4 ${
-                  isAIDiagnosis(diagnosis.diagnosis)
-                    ? 'bg-purple-50 border-2 border-purple-200'
-                    : 'bg-indigo-50 border-2 border-indigo-200'
-                }`}>
-                  <h6 className="font-bold text-gray-800 mb-3 flex items-center text-sm">
-                    <FaNotesMedical className="mr-2 text-indigo-600" />
-                    Шифрленген диагноз мәтіні:
-                  </h6>
-                  <div className="text-gray-700 text-sm leading-relaxed max-h-40 overflow-y-auto font-mono break-all">
-                    {diagnosis.diagnosis ? diagnosis.diagnosis.substring(0, 200) + '...' : 'Диагноз мәтіні жоқ'}
-                  </div>
-                </div>
-
-                {diagnosis.appointment?.doctor && (
-                  <div className="mt-4 pt-4 border-t border-gray-200">
-                    <div className="flex items-center">
-                      <FaUserMd className="text-blue-600 text-lg mr-3" />
                       <div>
-                        <p className="font-medium text-gray-800 text-sm">
-                          Дәрігер: {diagnosis.appointment.doctor.user?.firstName} {diagnosis.appointment.doctor.user?.lastName}
-                        </p>
-                        <p className="text-xs text-gray-600">
-                          {diagnosis.appointment.doctor.specialty}
+                        <div className="flex items-center gap-2">
+                          <h5 className="font-bold text-gray-800 text-lg">
+                            🩺 Диагноз №{diagnosis.diagnosisId}
+                          </h5>
+                          {isAIDiagnosis(diagnosis.diagnosis) && (
+                            <span className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs px-3 py-1 rounded-full font-bold">
+                              🤖 AI Диагноз
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-600 mt-1">
+                          📅 {formatDateShort(diagnosis.diagnosisDate)}
                         </p>
                       </div>
                     </div>
+                    <div className="flex items-center gap-2">
+                      <FaLock className="text-gray-400 text-sm" />
+                      <span className="text-xs text-gray-500">Шифрленген</span>
+                    </div>
                   </div>
-                )}
 
-                <div className="mt-4 pt-4 border-t border-gray-200 flex gap-3">
-                  <button
-                    onClick={() => handleDecryptDiagnosis(diagnosis)}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:from-emerald-600 hover:to-teal-600 transition text-sm font-medium"
-                  >
-                    <FaLockOpen className="text-sm" />
-                    Диагнозды шешу
-                  </button>
+                  <div className={`p-4 rounded-xl mb-4 ${
+                    isAIDiagnosis(diagnosis.diagnosis)
+                      ? 'bg-purple-50 border-2 border-purple-200'
+                      : 'bg-indigo-50 border-2 border-indigo-200'
+                  }`}>
+                    <h6 className="font-bold text-gray-800 mb-3 flex items-center text-sm">
+                      <FaNotesMedical className="mr-2 text-indigo-600" />
+                      Шифрленген диагноз мәтіні:
+                    </h6>
+                    <div className="text-gray-700 text-sm leading-relaxed font-mono break-all">
+                      {isExpanded ? diagnosisText : shortText}
+                    </div>
+                    
+                    {/* Кнопка для раскрытия полного текста */}
+                    {diagnosisText.length > 200 && (
+                      <button
+                        onClick={() => toggleExpandDiagnosis(diagnosis.diagnosisId)}
+                        className="mt-3 flex items-center gap-1 text-indigo-600 hover:text-indigo-700 text-sm font-medium"
+                      >
+                        {isExpanded ? (
+                          <>
+                            <FaChevronUp className="text-xs" />
+                            Аздап көрсету
+                          </>
+                        ) : (
+                          <>
+                            <FaChevronDown className="text-xs" />
+                            Толығырақ көрсету
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+
+                  {diagnosis.appointment?.doctor && (
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <div className="flex items-center">
+                        <FaUserMd className="text-blue-600 text-lg mr-3" />
+                        <div>
+                          <p className="font-medium text-gray-800 text-sm">
+                            Дәрігер: {diagnosis.appointment.doctor.user?.firstName} {diagnosis.appointment.doctor.user?.lastName}
+                          </p>
+                          <p className="text-xs text-gray-600">
+                            {diagnosis.appointment.doctor.specialty}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mt-4 pt-4 border-t border-gray-200 flex gap-3">
+                    <button
+                      onClick={() => handleViewDiagnosis(diagnosis.diagnosisId)}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:from-emerald-600 hover:to-teal-600 transition text-sm font-medium"
+                    >
+                      <FaLockOpen className="text-sm" />
+                      Диагнозды шешу
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );
@@ -1004,11 +995,11 @@ function PersonalProfile() {
                                 </div>
                               </div>
                               <button
-                                onClick={() => handleDecryptDiagnosis(prescription.diagnosis)}
+                                onClick={() => handleViewDiagnosis(prescription.diagnosis.diagnosisId)}
                                 className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 text-sm font-medium"
                               >
                                 <FaLockOpen className="text-xs" />
-                                Шешу
+                                Диагнозды шешу
                               </button>
                             </div>
                             <div className="bg-white p-4 rounded-lg border border-indigo-200">
@@ -1060,163 +1051,6 @@ function PersonalProfile() {
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Модальное окно расшифровки диагноза */}
-      <AnimatePresence>
-        {showDecryptModal && selectedDiagnosis && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 backdrop-blur-sm"
-            onClick={closeDecryptModal}
-          >
-            <motion.div
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className={`p-6 sticky top-0 z-10 ${
-                isAIDiagnosis(selectedDiagnosis.diagnosis)
-                  ? 'bg-gradient-to-r from-purple-600 to-pink-600'
-                  : 'bg-gradient-to-r from-emerald-600 to-teal-600'
-              } text-white`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <div className="p-3 bg-white/20 rounded-xl mr-4">
-                      {isAIDiagnosis(selectedDiagnosis.diagnosis) ? (
-                        <span className="text-2xl">🤖</span>
-                      ) : (
-                        <FaDiagnoses className="text-2xl" />
-                      )}
-                    </div>
-                    <div>
-                      <h2 className="text-2xl font-bold">Диагнозды шешу</h2>
-                      <p className="text-white/80 text-sm mt-1">
-                        Диагноз №{selectedDiagnosis.diagnosisId}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={closeDecryptModal}
-                    className="p-2 hover:bg-white/20 rounded-xl transition"
-                  >
-                    <FaTimes className="text-2xl" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-6">
-                {!decryptedDiagnosis ? (
-                  <>
-                    <div className="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-4 mb-6">
-                      <div className="flex items-start">
-                        <FaLock className="text-yellow-600 text-xl mr-3 mt-0.5" />
-                        <div>
-                          <h3 className="font-bold text-gray-800 mb-1">Шифрланған диагноз</h3>
-                          <p className="text-sm text-gray-700">
-                            Бұл диагноз қорғалған. Оны оқу үшін арнайы кілт қажет.
-                          </p>
-                        </div>
-                      </div>
-                      <div className="mt-3 p-3 bg-white rounded-lg font-mono text-xs break-all">
-                        {selectedDiagnosis.diagnosis}
-                      </div>
-                    </div>
-
-                    <div className="mb-6">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Шифрлау кілтін енгізіңіз:
-                      </label>
-                      <input
-                        type="text"
-                        value={decryptionKey}
-                        onChange={(e) => setDecryptionKey(e.target.value)}
-                        placeholder="Кілтті енгізіңіз..."
-                        className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-emerald-500"
-                        onKeyPress={(e) => e.key === 'Enter' && handleDecryptSubmit()}
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Кілтті дәрігерден немесе электрондық поштадан алуға болады
-                      </p>
-                    </div>
-
-                    {decryptError && (
-                      <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-xl text-sm border border-red-200">
-                        {decryptError}
-                      </div>
-                    )}
-
-                    <div className="flex gap-3">
-                      <button
-                        onClick={handleDecryptSubmit}
-                        disabled={decrypting || !decryptionKey.trim()}
-                        className={`flex-1 py-3 rounded-xl font-medium flex items-center justify-center gap-2 ${
-                          decrypting || !decryptionKey.trim()
-                            ? 'bg-gray-300 cursor-not-allowed'
-                            : 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700'
-                        }`}
-                      >
-                        {decrypting ? (
-                          <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                            Шешу...
-                          </>
-                        ) : (
-                          <>
-                            <FaLockOpen />
-                            Диагнозды шешу
-                          </>
-                        )}
-                      </button>
-                      <button
-                        onClick={closeDecryptModal}
-                        className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200"
-                      >
-                        Болдырмау
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-xl p-5 mb-6">
-                      <div className="flex items-center mb-4">
-                        <FaLockOpen className="text-emerald-600 text-xl mr-3" />
-                        <h3 className="font-bold text-gray-800 text-lg">Шешілген диагноз</h3>
-                      </div>
-                      <div className="bg-white p-4 rounded-xl border border-emerald-200">
-                        <p className="text-gray-800 whitespace-pre-wrap leading-relaxed">
-                          {decryptedDiagnosis}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => {
-                          setDecryptedDiagnosis('');
-                          setDecryptionKey('');
-                        }}
-                        className="flex-1 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 font-medium"
-                      >
-                        Басқа кілтпен қайта шешу
-                      </button>
-                      <button
-                        onClick={closeDecryptModal}
-                        className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 font-medium"
-                      >
-                        Жабу
-                      </button>
-                    </div>
-                  </>
                 )}
               </div>
             </motion.div>

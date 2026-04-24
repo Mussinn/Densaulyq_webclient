@@ -282,7 +282,7 @@ const HomePage = () => {
               Рөліңіз: {roles.includes('ROLE_DOCTOR') ? 'Дәрігер' : 'Науқас'}
             </p>
             <motion.button
-              onClick={() => navigate("/dashboard")}
+              onClick={() => navigate("/profile")}
               className="bg-white text-emerald-600 px-8 py-4 rounded-xl font-semibold hover:bg-emerald-50 shadow-lg hover:shadow-xl transition-all duration-200"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}

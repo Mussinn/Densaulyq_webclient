@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom'; // ← ДОБАВИТЬ ЭТОТ ИМПОРТ
 import api from '../../utils/api';
 import {
   FaVideo,
@@ -34,6 +35,7 @@ import {
 } from "react-icons/fa";
 
 const DoctorAppointments = () => {
+  const navigate = useNavigate(); 
   const [appointments, setAppointments] = useState([]);
   const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -52,7 +54,7 @@ const DoctorAppointments = () => {
   const [customAmount, setCustomAmount] = useState('');
   const [isCustomAmount, setIsCustomAmount] = useState(false);
   const [paymentError, setPaymentError] = useState('');
-  
+
   // Пациенттер үшін
   const [patients, setPatients] = useState([]);
   const [selectedPatient, setSelectedPatient] = useState(null);
@@ -110,14 +112,14 @@ const DoctorAppointments = () => {
 
       setPaymentDetails(response.data);
       setPaymentLink(response.data.paymentUrl);
-      
+
       setShowCreatePaymentModal(false);
       setShowPaymentModal(true);
-      
+
       setPaymentAmount(5000);
       setCustomAmount('');
       setIsCustomAmount(false);
-      
+
     } catch (err) {
       console.error('Төлем жасау қатесі:', err);
       setPaymentError(err.response?.data?.error || err.message);
@@ -605,8 +607,8 @@ const DoctorAppointments = () => {
             <button
               onClick={() => setActiveTab('appointments')}
               className={`px-5 py-3 rounded-xl flex items-center transition-all font-medium ${activeTab === 'appointments'
-                  ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md'
-                  : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md'
+                : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
                 }`}
             >
               <FaCalendar className="mr-2" /> Қабылдау жазбалары
@@ -618,8 +620,8 @@ const DoctorAppointments = () => {
             <button
               onClick={() => setActiveTab('patients')}
               className={`px-5 py-3 rounded-xl flex items-center transition-all font-medium ${activeTab === 'patients'
-                  ? 'bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shadow-md'
-                  : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                ? 'bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shadow-md'
+                : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
                 }`}
             >
               <FaUsers className="mr-2" /> Менің пациенттерім
@@ -631,8 +633,8 @@ const DoctorAppointments = () => {
             <button
               onClick={() => setActiveTab('meetings')}
               className={`px-5 py-3 rounded-xl flex items-center transition-all font-medium ${activeTab === 'meetings'
-                  ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-md'
-                  : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-md'
+                : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
                 }`}
             >
               <FaVideo className="mr-2" /> Видеокездесулер
@@ -799,6 +801,15 @@ const DoctorAppointments = () => {
                                   <><FaCreditCard className="mr-2" /> Шот ұсыну</>
                                 )}
                               </button>
+                              <button
+                                onClick={() => navigate(`/diagnosis/create?patientId=${app.patientId}&appointmentId=${app.id}&patientName=${encodeURIComponent(app.patientName)}`)}
+                                className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-sm font-medium flex items-center justify-center"
+                              >
+                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                Диагноз қою
+                              </button>
                             </>
                           )}
 
@@ -911,8 +922,8 @@ const DoctorAppointments = () => {
                           key={patient.id}
                           onClick={() => setSelectedPatient(patient)}
                           className={`w-full text-left p-4 rounded-xl transition-all border-2 ${selectedPatient?.id === patient.id
-                              ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white border-emerald-600 shadow-lg'
-                              : 'bg-gray-50 hover:bg-emerald-50 border-gray-100 hover:border-emerald-200'
+                            ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white border-emerald-600 shadow-lg'
+                            : 'bg-gray-50 hover:bg-emerald-50 border-gray-100 hover:border-emerald-200'
                             }`}
                         >
                           <div className="flex items-center justify-between mb-2">
@@ -1254,11 +1265,10 @@ const DoctorAppointments = () => {
                   <button
                     key={preset}
                     onClick={() => handleAmountSelect(preset)}
-                    className={`py-3 px-2 rounded-xl font-medium transition-all ${
-                      !isCustomAmount && paymentAmount === preset
+                    className={`py-3 px-2 rounded-xl font-medium transition-all ${!isCustomAmount && paymentAmount === preset
                         ? 'bg-green-600 text-white shadow-md ring-2 ring-green-300'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
-                    }`}
+                      }`}
                   >
                     {preset.toLocaleString()} ₸
                   </button>
@@ -1325,11 +1335,10 @@ const DoctorAppointments = () => {
                 <button
                   onClick={createPayment}
                   disabled={creatingPayment || (isCustomAmount && !customAmount)}
-                  className={`flex-1 py-3 rounded-xl text-white font-medium flex items-center justify-center ${
-                    creatingPayment || (isCustomAmount && !customAmount)
+                  className={`flex-1 py-3 rounded-xl text-white font-medium flex items-center justify-center ${creatingPayment || (isCustomAmount && !customAmount)
                       ? 'bg-gray-400 cursor-not-allowed'
                       : 'bg-green-600 hover:bg-green-700'
-                  }`}
+                    }`}
                 >
                   {creatingPayment ? (
                     <>
@@ -1408,18 +1417,17 @@ const DoctorAppointments = () => {
                 </div>
                 <div className="flex justify-between items-center text-sm mt-2">
                   <span className="text-gray-600">Мәртебе:</span>
-                  <span className={`px-3 py-1 rounded-lg text-xs font-medium ${
-                    paymentDetails.status === 'PENDING' || paymentDetails.status === 'pending' 
-                      ? 'bg-yellow-100 text-yellow-800' 
+                  <span className={`px-3 py-1 rounded-lg text-xs font-medium ${paymentDetails.status === 'PENDING' || paymentDetails.status === 'pending'
+                      ? 'bg-yellow-100 text-yellow-800'
                       : paymentDetails.status === 'PAID' || paymentDetails.status === 'paid'
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {paymentDetails.status === 'PENDING' || paymentDetails.status === 'pending' 
-                      ? 'Төлем күтілуде' 
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                    {paymentDetails.status === 'PENDING' || paymentDetails.status === 'pending'
+                      ? 'Төлем күтілуде'
                       : paymentDetails.status === 'PAID' || paymentDetails.status === 'paid'
-                      ? 'Төленген' 
-                      : paymentDetails.status}
+                        ? 'Төленген'
+                        : paymentDetails.status}
                   </span>
                 </div>
               </div>
@@ -1598,8 +1606,8 @@ const DoctorAppointments = () => {
                     onClick={sendInvite}
                     disabled={sendingInvite || !inviteEmail.trim()}
                     className={`w-full py-3.5 rounded-xl text-white font-medium flex items-center justify-center ${sendingInvite || !inviteEmail.trim()
-                        ? 'bg-gray-400 cursor-not-allowed'
-                        : 'bg-purple-600 hover:bg-purple-700'
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : 'bg-purple-600 hover:bg-purple-700'
                       }`}
                   >
                     {sendingInvite ? (
@@ -1673,8 +1681,8 @@ const DoctorAppointments = () => {
                   onClick={shareMeetingWithDoctor}
                   disabled={sharing || !selectedDoctorId}
                   className={`flex-1 py-3 rounded-xl font-medium flex items-center justify-center ${!selectedDoctorId || sharing
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-indigo-600 text-white hover:bg-indigo-700'
                     }`}
                 >
                   {sharing ? (
