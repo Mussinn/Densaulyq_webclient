@@ -57,64 +57,41 @@ const DensTalk = () => {
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [showMessageMenu, setShowMessageMenu] = useState(false);
   const [messageMenuPosition, setMessageMenuPosition] = useState({ x: 0, y: 0 });
-  
+
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const messageMenuRef = useRef(null);
-  
+
   const { token } = useSelector((state) => state.token);
-  const currentUserId = useSelector((state) => state.auth?.user?.userId);
-  const currentUser = useSelector((state) => state.auth?.user);
+  // ID берётся из state.token.user.id (см. tokenSlice — selectUserId)
+  const currentUserId = useSelector((state) => state.token.user?.id || state.token.user?.userId);
+  const currentUser = useSelector((state) => state.token.user);
 
-  // ========== ФАЙЛДЫ ЖҮКТЕУ ФУНКЦИЯЛАРЫ (localhost:8080 үшін) ==========
+  // ========== ФАЙЛ ФУНКЦИЯЛАРЫ ==========
 
-  // Backend базовый URL
   const API_BASE_URL = 'http://localhost:8080';
 
-  // Файл атын URL-ден алу
   const getFileNameFromUrl = (url) => {
     if (!url) return 'Файл';
     const parts = url.split('/');
     let filename = parts[parts.length - 1] || 'Файл';
-    if (filename.includes('?')) {
-      filename = filename.split('?')[0];
-    }
+    if (filename.includes('?')) filename = filename.split('?')[0];
     return filename;
   };
 
-  // Толық URL құрастыру
   const getFullUrl = (url) => {
     if (!url) return null;
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      return url;
-    }
-    if (url.startsWith('/')) {
-      return `${API_BASE_URL}${url}`;
-    }
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    if (url.startsWith('/')) return `${API_BASE_URL}${url}`;
     return `${API_BASE_URL}/${url}`;
   };
 
-  // Файлды жүктеу
   const handleDownloadFile = async (url, filename) => {
-    if (!url) {
-      alert('Файл URL-і табылмады');
-      return;
-    }
-    
+    if (!url) { alert('Файл URL-і табылмады'); return; }
     const fullUrl = getFullUrl(url);
-    console.log('Жүктеу URL:', fullUrl);
-    
     try {
-      const response = await fetch(fullUrl, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
+      const response = await fetch(fullUrl, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const blob = await response.blob();
       const downloadUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -124,25 +101,19 @@ const DensTalk = () => {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(downloadUrl);
-      
     } catch (err) {
-      console.error('Файлды жүктеу қатесі:', err);
-      alert('Файлды жүктеу қатесі. Файлды жаңа қойында ашып көріңіз.');
+      console.error('Жүктеу қатесі:', err);
       window.open(fullUrl, '_blank');
     }
   };
 
-  // Суретті қарау
   const handleViewImage = (url) => {
     if (!url) return;
-    
-    let fullUrl = getFullUrl(url);
+    const fullUrl = getFullUrl(url);
     const viewUrl = fullUrl.replace('/files/', '/files/view/');
-    console.log('Қарау URL:', viewUrl);
     window.open(viewUrl, '_blank');
   };
 
-  // Файл түрін анықтау
   const getFileIcon = (filename, mimeType) => {
     if (mimeType?.startsWith('image/')) return <FaImage className="text-purple-500" />;
     if (mimeType === 'application/pdf') return <FaFile className="text-red-500" />;
@@ -151,7 +122,6 @@ const DensTalk = () => {
     return <FaFile className="text-gray-500" />;
   };
 
-  // Файл өлшемін пішімдеу
   const formatFileSize = (bytes) => {
     if (!bytes) return '0 KB';
     if (bytes < 1024) return `${bytes} B`;
@@ -159,72 +129,41 @@ const DensTalk = () => {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  // ========== ИНИЦИАЛДАРДЫ АЛУ ФУНКЦИЯСЫ ==========
-  
-  // Инициалдарды дұрыс алу
+  // ========== УТИЛИТЫ ==========
+
   const getInitials = (name, fallback = 'Қ') => {
     if (!name || name === 'Қолданушы' || name === 'Unknown') return fallback;
-    
-    // Бос орындарды кетіру
     const cleanName = name.trim();
-    
-    // Егер бірінші әріп бар болса
     if (cleanName.length > 0) {
       const firstChar = cleanName.charAt(0).toUpperCase();
-      // Тек әріп екенін тексеру
-      if (/[A-Za-zА-Яа-я]/.test(firstChar)) {
-        return firstChar;
-      }
+      if (/[A-Za-zА-Яа-я]/.test(firstChar)) return firstChar;
     }
-    
     return fallback;
   };
 
-  // Пайдаланушының атын алу (әртүрлі форматтардан)
   const getUserDisplayName = (user) => {
     if (!user) return 'Қолданушы';
-    
-    // Егер firstName және lastName бар болса
     if (user.firstName) {
-      if (user.lastName) {
-        return `${user.firstName} ${user.lastName}`;
-      }
+      if (user.lastName) return `${user.firstName} ${user.lastName}`;
       return user.firstName;
     }
-    
-    // Егер name бар болса
     if (user.name) return user.name;
-    
-    // Егер username бар болса
     if (user.username) return user.username;
-    
-    // Егер email бар болса
     if (user.email) return user.email.split('@')[0];
-    
     return 'Қолданушы';
   };
 
-  // Ағымдағы пайдаланушының инициалы
-  const getCurrentUserInitials = () => {
-    if (currentUser?.firstName) {
-      return currentUser.firstName.charAt(0).toUpperCase();
-    }
-    if (currentUser?.username) {
-      return currentUser.username.charAt(0).toUpperCase();
-    }
-    return 'С'; // 'Сіз'
-  };
-
-  // Анимация варианттары
   const fadeIn = {
     hidden: { opacity: 0, y: 20 },
     visible: { opacity: 1, y: 0, transition: { duration: 0.3 } }
   };
 
   const messageVariants = {
-    hidden: { opacity: 0, scale: 0.8, y: 20 },
-    visible: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.3 } }
+    hidden: { opacity: 0, scale: 0.92, y: 10 },
+    visible: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.2 } }
   };
+
+  // ========== API ВЫЗОВЫ ==========
 
   const fetchChats = async () => {
     try {
@@ -232,17 +171,13 @@ const DensTalk = () => {
       const response = await api.get('/api/v1/chats', {
         headers: { Authorization: `Bearer ${token}` },
       });
-      
-      const sortedChats = (response.data || []).sort((a, b) => 
+      const sortedChats = (response.data || []).sort((a, b) =>
         new Date(b.lastMessageAt || b.createdAt) - new Date(a.lastMessageAt || a.createdAt)
       );
       setChats(sortedChats);
-      
       if (activeChat) {
         const updatedActiveChat = sortedChats.find(chat => chat.id === activeChat.id);
-        if (updatedActiveChat) {
-          setActiveChat(updatedActiveChat);
-        }
+        if (updatedActiveChat) setActiveChat(updatedActiveChat);
       }
     } catch (error) {
       console.error('Чаттарды жүктеу қатесі:', error);
@@ -257,7 +192,6 @@ const DensTalk = () => {
       const response = await api.get('/api/v1/users/all', {
         headers: { Authorization: `Bearer ${token}` },
       });
-      
       const usersData = response.data
         .filter(user => user.userId !== currentUserId)
         .map(user => ({
@@ -272,7 +206,6 @@ const DensTalk = () => {
           specialty: user.doctor?.specialty || user.specialty || '',
           initials: getInitials(user.firstName || user.username || user.email)
         }));
-      
       setUsersList(usersData);
     } catch (error) {
       console.error('Қолданушыларды жүктеу қатесі:', error);
@@ -281,14 +214,12 @@ const DensTalk = () => {
 
   const fetchMessages = async (chatId) => {
     if (!chatId) return;
-    
     try {
       setLoadingMessages(true);
       const response = await api.get(`/api/v1/chats/${chatId}/messages`, {
         headers: { Authorization: `Bearer ${token}` },
         params: { limit: 100, offset: 0 }
       });
-      
       setMessages(response.data || []);
       await markAsRead(chatId);
     } catch (error) {
@@ -312,43 +243,27 @@ const DensTalk = () => {
   const sendMessage = async () => {
     if (!newMessage.trim() && attachments.length === 0) return;
     if (!activeChat) return;
-    
     try {
       setSending(true);
-      
       const formData = new FormData();
       formData.append('content', newMessage.trim());
       formData.append('chatId', activeChat.id);
-      
-      if (replyTo) {
-        formData.append('replyToId', replyTo.id);
-      }
-      
-      attachments.forEach((file) => {
-        formData.append('attachments', file);
-      });
-      
+      if (replyTo) formData.append('replyToId', replyTo.id);
+      attachments.forEach((file) => formData.append('attachments', file));
       const response = await api.post('/api/v1/messages', formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',
-        },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' },
       });
-      
       const newMsg = response.data;
       setMessages(prev => [...prev, newMsg]);
       setNewMessage('');
       setAttachments([]);
       setReplyTo(null);
-      
-      setChats(prev => prev.map(chat => 
-        chat.id === activeChat.id 
+      setChats(prev => prev.map(chat =>
+        chat.id === activeChat.id
           ? { ...chat, lastMessage: newMsg.content, lastMessageAt: new Date().toISOString() }
           : chat
       ));
-      
       scrollToBottom();
-      
     } catch (error) {
       console.error('Хабарлама жіберу қатесі:', error);
       alert('Хабарлама жіберу мүмкін болмады');
@@ -358,28 +273,18 @@ const DensTalk = () => {
   };
 
   const createNewChat = async () => {
-    if (!selectedUserId) {
-      alert('Қолданушыны таңдаңыз');
-      return;
-    }
-    
+    if (!selectedUserId) { alert('Қолданушыны таңдаңыз'); return; }
     try {
-      const response = await api.post('/api/v1/chats', {
-        participantId: selectedUserId
-      }, {
+      const response = await api.post('/api/v1/chats', { participantId: selectedUserId }, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      
       const newChat = response.data;
       setChats(prev => [newChat, ...prev]);
       setActiveChat(newChat);
       setShowNewChatModal(false);
       setSelectedUserId('');
       fetchMessages(newChat.id);
-      
-      if (window.innerWidth < 768) {
-        setShowChatList(false);
-      }
+      if (window.innerWidth < 768) setShowChatList(false);
     } catch (error) {
       console.error('Чат құру қатесі:', error);
       alert('Чат құру мүмкін болмады');
@@ -388,14 +293,8 @@ const DensTalk = () => {
 
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files);
-    const validFiles = files.filter(file => 
-      file.size <= 10 * 1024 * 1024
-    );
-    
-    if (validFiles.length !== files.length) {
-      alert('Кейбір файлдар 10MB шектеуінен асады');
-    }
-    
+    const validFiles = files.filter(file => file.size <= 10 * 1024 * 1024);
+    if (validFiles.length !== files.length) alert('Кейбір файлдар 10MB шектеуінен асады');
     setAttachments(prev => [...prev, ...validFiles]);
   };
 
@@ -437,20 +336,8 @@ const DensTalk = () => {
 
   const formatMessageTime = (dateString) => {
     try {
-      const date = new Date(dateString);
-      return format(date, 'HH:mm', { locale: kk });
-    } catch {
-      return '--:--';
-    }
-  };
-
-  const formatFullMessageTime = (dateString) => {
-    try {
-      const date = new Date(dateString);
-      return format(date, 'dd MMMM yyyy, HH:mm', { locale: kk });
-    } catch {
-      return '';
-    }
+      return format(new Date(dateString), 'HH:mm', { locale: kk });
+    } catch { return '--:--'; }
   };
 
   const formatChatDate = (dateString) => {
@@ -458,26 +345,16 @@ const DensTalk = () => {
       const date = new Date(dateString);
       const now = new Date();
       const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
-      
-      if (diffDays === 0) {
-        return format(date, 'HH:mm', { locale: kk });
-      } else if (diffDays === 1) {
-        return 'Кеше';
-      } else if (diffDays < 7) {
-        return format(date, 'EEEE', { locale: kk });
-      } else {
-        return format(date, 'dd.MM.yy', { locale: kk });
-      }
-    } catch {
-      return '';
-    }
+      if (diffDays === 0) return format(date, 'HH:mm', { locale: kk });
+      if (diffDays === 1) return 'Кеше';
+      if (diffDays < 7) return format(date, 'EEEE', { locale: kk });
+      return format(date, 'dd.MM.yy', { locale: kk });
+    } catch { return ''; }
   };
 
   const handleChatSelect = (chat) => {
     setActiveChat(chat);
-    if (window.innerWidth < 768) {
-      setShowChatList(false);
-    }
+    if (window.innerWidth < 768) setShowChatList(false);
   };
 
   const handleBackToChats = () => {
@@ -517,9 +394,7 @@ const DensTalk = () => {
 
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (messageMenuRef.current && !messageMenuRef.current.contains(e.target)) {
-        closeMessageMenu();
-      }
+      if (messageMenuRef.current && !messageMenuRef.current.contains(e.target)) closeMessageMenu();
     };
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
@@ -527,12 +402,9 @@ const DensTalk = () => {
 
   const filteredChats = chats.filter(chat => {
     const searchLower = searchQuery.toLowerCase();
-    const participantName = chat.participant?.name || '';
-    const lastMessage = chat.lastMessage || '';
-    
     return (
-      participantName.toLowerCase().includes(searchLower) ||
-      lastMessage.toLowerCase().includes(searchLower)
+      (chat.participant?.name || '').toLowerCase().includes(searchLower) ||
+      (chat.lastMessage || '').toLowerCase().includes(searchLower)
     );
   });
 
@@ -540,17 +412,12 @@ const DensTalk = () => {
     if (token) {
       fetchChats();
       fetchUsers();
-      
-      if (window.innerWidth < 768) {
-        setShowChatList(true);
-      }
+      if (window.innerWidth < 768) setShowChatList(true);
     }
   }, [token]);
 
   useEffect(() => {
-    if (activeChat) {
-      fetchMessages(activeChat.id);
-    }
+    if (activeChat) fetchMessages(activeChat.id);
   }, [activeChat]);
 
   useEffect(() => {
@@ -559,64 +426,46 @@ const DensTalk = () => {
 
   useEffect(() => {
     if (!token) return;
-    
     const interval = setInterval(() => {
       fetchChats();
-      if (activeChat) {
-        fetchMessages(activeChat.id);
-      }
+      if (activeChat) fetchMessages(activeChat.id);
     }, 10000);
-    
     return () => clearInterval(interval);
   }, [token, activeChat]);
 
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth >= 768) {
-        setShowChatList(true);
-      }
+      if (window.innerWidth >= 768) setShowChatList(true);
     };
-
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const getMessageStatusIcon = (message) => {
-    if (message.senderId !== currentUserId) return null;
-    
-    if (message.readAt) {
-      return <FaCheckDouble className="text-blue-500" title="Оқылды" />;
-    }
-    if (message.deliveredAt) {
-      return <FaCheckDouble className="text-gray-400" title="Жеткізілді" />;
-    }
-    if (message.sentAt) {
-      return <FaCheck className="text-gray-400" title="Жіберілді" />;
-    }
-    return <FaRegClock className="text-gray-400" title="Күтуде" />;
+    const senderId = message.sender?.id ?? message.senderId;
+    if (Number(senderId) !== Number(currentUserId)) return null;
+    if (message.readAt) return <FaCheckDouble className="text-blue-400" title="Оқылды" />;
+    if (message.deliveredAt) return <FaCheckDouble className="text-gray-300" title="Жеткізілді" />;
+    if (message.sentAt) return <FaCheck className="text-gray-300" title="Жіберілді" />;
+    return <FaRegClock className="text-gray-300" title="Күтуде" />;
   };
 
   const groupMessages = (messages) => {
     const grouped = [];
     let currentGroup = [];
-    
     messages.forEach((msg, index) => {
       const prevMsg = messages[index - 1];
-      
-      if (prevMsg && prevMsg.senderId === msg.senderId) {
+      // sender может быть объектом {id, ...} или плоским senderId
+      const msgSenderId = msg.sender?.id ?? msg.senderId;
+      const prevSenderId = prevMsg ? (prevMsg.sender?.id ?? prevMsg.senderId) : null;
+      if (prevMsg && String(prevSenderId) === String(msgSenderId)) {
         currentGroup.push(msg);
       } else {
-        if (currentGroup.length > 0) {
-          grouped.push(currentGroup);
-        }
+        if (currentGroup.length > 0) grouped.push(currentGroup);
         currentGroup = [msg];
       }
     });
-    
-    if (currentGroup.length > 0) {
-      grouped.push(currentGroup);
-    }
-    
+    if (currentGroup.length > 0) grouped.push(currentGroup);
     return grouped;
   };
 
@@ -625,9 +474,9 @@ const DensTalk = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-50 to-emerald-50 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
-        
+
         {/* Тақырып */}
-        <motion.header 
+        <motion.header
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
@@ -642,7 +491,6 @@ const DensTalk = () => {
                 Пациенттер мен әріптестермен қарым-қатынас жасауға арналған қауіпсіз мессенджер
               </p>
             </div>
-            
             <div className="flex flex-wrap gap-3">
               <div className="bg-white rounded-xl px-4 py-2 flex items-center shadow-sm border border-gray-200">
                 <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
@@ -667,7 +515,6 @@ const DensTalk = () => {
                 </div>
               </div>
             </div>
-            
             <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
               <div className="flex items-center">
                 <div className="w-12 h-12 bg-gradient-to-r from-blue-100 to-cyan-100 rounded-lg flex items-center justify-center mr-3">
@@ -681,7 +528,6 @@ const DensTalk = () => {
                 </div>
               </div>
             </div>
-            
             <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
               <div className="flex items-center">
                 <div className="w-12 h-12 bg-gradient-to-r from-violet-100 to-purple-100 rounded-lg flex items-center justify-center mr-3">
@@ -698,15 +544,16 @@ const DensTalk = () => {
 
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden h-[calc(100vh-280px)] md:h-[calc(100vh-300px)] border border-gray-200">
           <div className="flex h-full">
+
             {/* Чаттар тізімі */}
-            <motion.div 
+            <motion.div
               variants={fadeIn}
               initial="hidden"
               animate="visible"
               className={`
-                ${showChatList ? 'flex' : 'hidden'} 
-                md:flex w-full md:w-96 
-                border-r border-gray-200 
+                ${showChatList ? 'flex' : 'hidden'}
+                md:flex w-full md:w-96
+                border-r border-gray-200
                 flex-col h-full bg-gradient-to-b from-white to-gray-50
               `}
             >
@@ -724,7 +571,6 @@ const DensTalk = () => {
                     <FaPaperPlane />
                   </button>
                 </div>
-                
                 <div className="relative">
                   <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white/70" />
                   <input
@@ -762,8 +608,8 @@ const DensTalk = () => {
                         whileHover={{ scale: 0.99, backgroundColor: '#f9fafb' }}
                         onClick={() => handleChatSelect(chat)}
                         className={`p-4 cursor-pointer transition-all ${
-                          activeChat?.id === chat.id 
-                            ? 'bg-gradient-to-r from-emerald-50 to-teal-50 border-l-4 border-emerald-600 shadow-inner' 
+                          activeChat?.id === chat.id
+                            ? 'bg-gradient-to-r from-emerald-50 to-teal-50 border-l-4 border-emerald-600 shadow-inner'
                             : 'hover:bg-gray-50'
                         }`}
                       >
@@ -776,7 +622,6 @@ const DensTalk = () => {
                               <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full animate-pulse"></div>
                             )}
                           </div>
-
                           <div className="flex-1 min-w-0">
                             <div className="flex justify-between items-start mb-1">
                               <h4 className="font-medium text-gray-900 truncate flex items-center">
@@ -787,11 +632,9 @@ const DensTalk = () => {
                                 {formatChatDate(chat.lastMessageAt)}
                               </span>
                             </div>
-                            
                             <p className="text-sm text-gray-600 truncate mb-1">
                               {chat.lastMessage || 'Хабарламалар жоқ'}
                             </p>
-                            
                             <div className="flex items-center justify-between">
                               <span className="text-xs text-gray-500 truncate flex items-center">
                                 <FaStethoscope className="mr-1 text-emerald-600" size={10} />
@@ -813,18 +656,19 @@ const DensTalk = () => {
             </motion.div>
 
             {/* Хабарламалар аймағы */}
-            <motion.div 
+            <motion.div
               variants={fadeIn}
               initial="hidden"
               animate="visible"
               className={`
-                ${!showChatList ? 'flex' : 'hidden'} 
-                md:flex flex-1 
+                ${!showChatList ? 'flex' : 'hidden'}
+                md:flex flex-1
                 flex-col h-full bg-gradient-to-b from-gray-50 to-white
               `}
             >
               {activeChat ? (
                 <>
+                  {/* Чат хедері */}
                   <div className="p-4 md:p-6 border-b border-gray-200 bg-gradient-to-r from-emerald-600 to-teal-600 flex items-center justify-between">
                     <div className="flex items-center space-x-3">
                       <button
@@ -844,13 +688,12 @@ const DensTalk = () => {
                           </h3>
                           <p className="text-sm text-emerald-100 flex items-center">
                             <span className={`w-2 h-2 rounded-full mr-2 ${activeChat.participant?.online ? 'bg-green-400 animate-pulse' : 'bg-gray-300'}`}></span>
-                            {activeChat.participant?.online ? 'Желіде' : 'Желіде емес'} 
+                            {activeChat.participant?.online ? 'Желіде' : 'Желіде емес'}
                             {activeChat.participant?.specialty && ` • ${activeChat.participant.specialty}`}
                           </p>
                         </div>
                       </div>
                     </div>
-                    
                     <div className="flex items-center space-x-2">
                       <button className="p-2.5 text-white hover:bg-white/20 rounded-xl transition-colors">
                         <FaPhone />
@@ -864,7 +707,7 @@ const DensTalk = () => {
                     </div>
                   </div>
 
-                  {/* Хабарламалар */}
+                  {/* ========== ХАБАРЛАМАЛАР (WhatsApp стилі) ========== */}
                   <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-gradient-to-b from-gray-50 to-white">
                     {loadingMessages ? (
                       <div className="flex items-center justify-center h-full">
@@ -882,27 +725,32 @@ const DensTalk = () => {
                       </div>
                     ) : (
                       <AnimatePresence>
-                        <div className="space-y-6">
+                        <div className="space-y-1">
                           {messageGroups.map((group, groupIndex) => {
-                            const isOwnGroup = group[0].senderId === currentUserId;
-                            const showAvatar = !isOwnGroup;
-                            
+                            // sender может быть объектом {id,...} или плоским полем senderId
+                            const msgSenderId = group[0].sender?.id ?? group[0].senderId;
+                            const isOwnGroup = Number(msgSenderId) === Number(currentUserId);
+
                             return (
-                              <div key={groupIndex} className={`flex ${isOwnGroup ? 'justify-end' : 'justify-start'} mb-4`}>
-                                <div className={`flex items-end ${isOwnGroup ? 'flex-row-reverse' : 'flex-row'} max-w-[75%]`}>
-                                  {/* Аватар (тек басқа адамның хабарламалары үшін) */}
-                                  {showAvatar && (
-                                    <div className="flex-shrink-0 mr-2 mb-1">
-                                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${getAvatarColor(group[0].senderId)} text-white text-xs shadow-sm`}>
-                                        {getInitials(activeChat.participant?.name || activeChat.participant?.firstName)}
-                                      </div>
-                                    </div>
+                              <div
+                                key={groupIndex}
+                                className={`flex ${isOwnGroup ? 'justify-end' : 'justify-start'} mb-3`}
+                              >
+                                <div className={`max-w-[72%] flex flex-col ${isOwnGroup ? 'items-end' : 'items-start'}`}>
+
+                                  {/* Имя отправителя — только у чужих сообщений */}
+                                  {!isOwnGroup && (
+                                    <span className="text-xs font-medium text-emerald-700 mb-1 px-1">
+                                      {activeChat.participant?.name || 'Қолданушы'}
+                                    </span>
                                   )}
-                                  
-                                  <div className={`flex flex-col ${isOwnGroup ? 'items-end' : 'items-start'}`}>
-                                    {/* Хабарламалар тобы */}
-                                    <div className={`space-y-1 ${isOwnGroup ? 'items-end' : 'items-start'}`}>
-                                      {group.map((message, idx) => (
+
+                                  <div className="space-y-0.5 w-full">
+                                    {group.map((message, idx) => {
+                                      const isFirst = idx === 0;
+                                      const isLast = idx === group.length - 1;
+
+                                      return (
                                         <motion.div
                                           key={message.id}
                                           variants={messageVariants}
@@ -912,40 +760,51 @@ const DensTalk = () => {
                                           className="group relative"
                                           onContextMenu={(e) => handleMessageContextMenu(e, message)}
                                         >
-                                          {/* Жауаптау блогы */}
+                                          {/* Блок ответа */}
                                           {message.replyTo && (
-                                            <div className={`mb-1 p-2 rounded-lg text-xs ${
-                                              isOwnGroup 
-                                                ? 'bg-emerald-500/30 text-emerald-100 rounded-br-none' 
-                                                : 'bg-gray-200 text-gray-700 rounded-bl-none'
+                                            <div className={`mb-0.5 px-3 py-2 rounded-xl text-xs border-l-2 ${
+                                              isOwnGroup
+                                                ? 'bg-emerald-700/40 text-emerald-100 border-emerald-300 rounded-br-none'
+                                                : 'bg-gray-100 text-gray-600 border-emerald-500 rounded-bl-none'
                                             }`}>
-                                              <div className="font-medium flex items-center gap-1">
-                                                <FaReply size={10} />
-                                                {message.replyTo.senderId === currentUserId ? 'Сіз' : activeChat.participant?.name}
+                                              <div className="font-semibold flex items-center gap-1 mb-0.5">
+                                                <FaReply size={9} />
+                                                {Number(message.replyTo.sender?.id ?? message.replyTo.senderId) === Number(currentUserId)
+                                                  ? 'Сіз'
+                                                  : activeChat.participant?.name}
                                               </div>
-                                              <div className="truncate max-w-[200px]">
+                                              <div className="truncate opacity-80">
                                                 {message.replyTo.content || 'Тіркеме'}
                                               </div>
                                             </div>
                                           )}
-                                          
-                                          <div
-                                            className={`relative rounded-2xl p-3 transition-all ${
-                                              isOwnGroup 
-                                                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-br-none shadow-md' 
-                                                : 'bg-white border border-gray-200 rounded-bl-none shadow-sm hover:shadow-md'
-                                            }`}
-                                          >
-                                            {/* Тіркемелер */}
+
+                                          <div className={`relative px-3 py-2 transition-all ${
+                                            isOwnGroup
+                                              ? `bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md ${
+                                                  isFirst && isLast ? 'rounded-2xl rounded-br-sm'
+                                                  : isFirst ? 'rounded-t-2xl rounded-tl-2xl rounded-br-sm rounded-bl-2xl'
+                                                  : isLast ? 'rounded-b-2xl rounded-tr-2xl rounded-br-sm'
+                                                  : 'rounded-l-2xl rounded-r-sm'
+                                                }`
+                                              : `bg-white border border-gray-200 shadow-sm hover:shadow-md ${
+                                                  isFirst && isLast ? 'rounded-2xl rounded-bl-sm'
+                                                  : isFirst ? 'rounded-t-2xl rounded-tr-2xl rounded-bl-sm rounded-br-2xl'
+                                                  : isLast ? 'rounded-b-2xl rounded-tl-2xl rounded-bl-sm'
+                                                  : 'rounded-r-2xl rounded-l-sm'
+                                                }`
+                                          }`}>
+
+                                            {/* Вложения */}
                                             {message.attachments && message.attachments.length > 0 && (
                                               <div className="mb-2 space-y-2">
                                                 {message.attachments.map((attachment, attIdx) => (
                                                   <div key={attIdx} className="rounded-lg overflow-hidden bg-black/5">
                                                     {attachment.mimeType?.startsWith('image/') ? (
                                                       <div className="relative group/image">
-                                                        <img 
+                                                        <img
                                                           src={getFullUrl(attachment.url)}
-                                                          alt={attachment.name || 'Сурет'} 
+                                                          alt={attachment.name || 'Сурет'}
                                                           className="max-w-full max-h-48 object-cover cursor-pointer hover:opacity-90 transition-opacity rounded-lg"
                                                           onClick={() => handleViewImage(attachment.url)}
                                                         />
@@ -961,12 +820,8 @@ const DensTalk = () => {
                                                         <div className="flex items-center flex-1 min-w-0">
                                                           {getFileIcon(attachment.name, attachment.mimeType)}
                                                           <div className="ml-2 flex-1 min-w-0">
-                                                            <div className="font-medium truncate text-xs">
-                                                              {attachment.name || 'Файл'}
-                                                            </div>
-                                                            <div className="text-xs opacity-70">
-                                                              {formatFileSize(attachment.size)}
-                                                            </div>
+                                                            <div className="font-medium truncate text-xs">{attachment.name || 'Файл'}</div>
+                                                            <div className="text-xs opacity-70">{formatFileSize(attachment.size)}</div>
                                                           </div>
                                                         </div>
                                                         <button
@@ -981,27 +836,29 @@ const DensTalk = () => {
                                                 ))}
                                               </div>
                                             )}
-                                            
-                                            {/* Хабарлама мәтіні */}
+
+                                            {/* Текст сообщения */}
                                             {message.content && (
-                                              <p className="whitespace-pre-wrap break-words leading-relaxed text-sm">
+                                              <p className={`whitespace-pre-wrap break-words leading-relaxed text-sm ${
+                                                isOwnGroup ? 'text-white' : 'text-gray-800'
+                                              }`}>
                                                 {message.content}
                                               </p>
                                             )}
-                                            
-                                            {/* Уақыт және статус */}
-                                            <div className={`flex items-center justify-end gap-1 mt-1 text-xs ${
-                                              isOwnGroup ? 'text-emerald-200' : 'text-gray-400'
+
+                                            {/* Время и статус */}
+                                            <div className={`flex items-center justify-end gap-1 mt-1 ${
+                                              isOwnGroup ? 'text-emerald-100/80' : 'text-gray-400'
                                             }`}>
                                               <span className="text-[10px]">
                                                 {formatMessageTime(message.createdAt)}
                                               </span>
                                               {getMessageStatusIcon(message)}
                                             </div>
-                                            
-                                            {/* Хабарлама әрекеттері (әдепкіде көрінбейді, курсор тигізгенде көрінеді) */}
-                                            <div className={`absolute top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity ${
-                                              isOwnGroup ? '-left-16' : '-right-16'
+
+                                            {/* Кнопки при hover */}
+                                            <div className={`absolute top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10 ${
+                                              isOwnGroup ? '-left-20' : '-right-20'
                                             }`}>
                                               <button
                                                 onClick={() => handleReply(message)}
@@ -1013,7 +870,7 @@ const DensTalk = () => {
                                               <button
                                                 onClick={() => handleStarMessage(message)}
                                                 className="p-1.5 bg-white rounded-full shadow-md hover:bg-gray-100 transition-colors text-gray-600"
-                                                title="Маңызды деп белгілеу"
+                                                title="Маңызды"
                                               >
                                                 <FaRegStar size={10} />
                                               </button>
@@ -1027,8 +884,8 @@ const DensTalk = () => {
                                             </div>
                                           </div>
                                         </motion.div>
-                                      ))}
-                                    </div>
+                                      );
+                                    })}
                                   </div>
                                 </div>
                               </div>
@@ -1040,10 +897,10 @@ const DensTalk = () => {
                     )}
                   </div>
 
-                  {/* Хабарламаға жауап */}
+                  {/* Блок ответа */}
                   <AnimatePresence>
                     {replyTo && (
-                      <motion.div 
+                      <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 20 }}
@@ -1059,7 +916,7 @@ const DensTalk = () => {
                               {replyTo.content || 'Тіркеме'}
                             </div>
                           </div>
-                          <button 
+                          <button
                             onClick={() => setReplyTo(null)}
                             className="text-emerald-600 hover:text-emerald-800 transition-colors p-1"
                           >
@@ -1070,10 +927,10 @@ const DensTalk = () => {
                     )}
                   </AnimatePresence>
 
-                  {/* Тіркемелер */}
+                  {/* Вложения */}
                   <AnimatePresence>
                     {attachments.length > 0 && (
-                      <motion.div 
+                      <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 20 }}
@@ -1087,9 +944,7 @@ const DensTalk = () => {
                               ) : (
                                 <FaFile className="text-gray-500 mr-2" />
                               )}
-                              <span className="text-sm truncate max-w-[150px] md:max-w-[200px]">
-                                {file.name}
-                              </span>
+                              <span className="text-sm truncate max-w-[150px] md:max-w-[200px]">{file.name}</span>
                               <button
                                 onClick={() => removeAttachment(index)}
                                 className="ml-3 text-red-500 hover:text-red-700 transition-colors"
@@ -1103,7 +958,7 @@ const DensTalk = () => {
                     )}
                   </AnimatePresence>
 
-                  {/* Енгізу өрісі */}
+                  {/* Поле ввода */}
                   <div className="p-4 md:p-6 border-t border-gray-200 bg-white">
                     <div className="flex items-end space-x-3">
                       <div className="flex-1 bg-gray-50 rounded-2xl border border-gray-200 focus-within:ring-2 focus-within:ring-emerald-500 focus-within:border-transparent transition-all">
@@ -1120,10 +975,9 @@ const DensTalk = () => {
                             }
                           }}
                         />
-                        
                         <div className="flex items-center justify-between px-4 pb-3">
                           <div className="flex items-center space-x-3">
-                            <button 
+                            <button
                               onClick={() => fileInputRef.current?.click()}
                               className="text-gray-500 hover:text-emerald-600 transition-colors p-1"
                               title="Файл тіркеу"
@@ -1142,13 +996,9 @@ const DensTalk = () => {
                               <FaSmile />
                             </button>
                           </div>
-                          
-                          <div className="text-xs text-gray-500">
-                            {newMessage.length}/2000
-                          </div>
+                          <div className="text-xs text-gray-500">{newMessage.length}/2000</div>
                         </div>
                       </div>
-                      
                       <button
                         onClick={sendMessage}
                         disabled={sending || (!newMessage.trim() && attachments.length === 0)}
@@ -1192,7 +1042,7 @@ const DensTalk = () => {
         </div>
       </div>
 
-      {/* Хабарлама әрекеттері мәзірі */}
+      {/* Контекстное меню сообщения */}
       <AnimatePresence>
         {showMessageMenu && selectedMessage && (
           <motion.div
@@ -1224,10 +1074,8 @@ const DensTalk = () => {
               <FaRegStar className="text-yellow-600" />
               Маңызды деп белгілеу
             </button>
-            {selectedMessage.senderId === currentUserId && (
-              <button
-                className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors"
-              >
+            {Number(selectedMessage.sender?.id ?? selectedMessage.senderId) === Number(currentUserId) && (
+              <button className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors">
                 <FaTrash />
                 Жою
               </button>
@@ -1236,17 +1084,17 @@ const DensTalk = () => {
         )}
       </AnimatePresence>
 
-      {/* Жаңа чат модальды терезесі */}
+      {/* Модальное окно нового чата */}
       <AnimatePresence>
         {showNewChatModal && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
             onClick={() => setShowNewChatModal(false)}
           >
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
@@ -1266,9 +1114,7 @@ const DensTalk = () => {
                     <FaTimes />
                   </button>
                 </div>
-                <p className="text-emerald-100 text-sm mt-1">
-                  Сөйлесуді бастау үшін қолданушыны таңдаңыз
-                </p>
+                <p className="text-emerald-100 text-sm mt-1">Сөйлесуді бастау үшін қолданушыны таңдаңыз</p>
               </div>
 
               <div className="flex-1 overflow-y-auto p-6 bg-gradient-to-b from-gray-50 to-white">
@@ -1341,23 +1187,10 @@ const DensTalk = () => {
       </AnimatePresence>
 
       <style jsx>{`
-        ::-webkit-scrollbar {
-          width: 6px;
-        }
-        
-        ::-webkit-scrollbar-track {
-          background: #f1f1f1;
-          border-radius: 3px;
-        }
-        
-        ::-webkit-scrollbar-thumb {
-          background: #c1c1c1;
-          border-radius: 3px;
-        }
-        
-        ::-webkit-scrollbar-thumb:hover {
-          background: #a1a1a1;
-        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a1a1a1; }
       `}</style>
     </div>
   );

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom'; // ← ДОБАВИТЬ ЭТОТ ИМПОРТ
+import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import {
   FaVideo,
@@ -35,7 +35,7 @@ import {
 } from "react-icons/fa";
 
 const DoctorAppointments = () => {
-  const navigate = useNavigate(); 
+  const navigate = useNavigate();
   const [appointments, setAppointments] = useState([]);
   const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -55,7 +55,7 @@ const DoctorAppointments = () => {
   const [isCustomAmount, setIsCustomAmount] = useState(false);
   const [paymentError, setPaymentError] = useState('');
 
-  // Пациенттер үшін
+  // Пациенттер
   const [patients, setPatients] = useState([]);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [patientSearchQuery, setPatientSearchQuery] = useState('');
@@ -67,19 +67,38 @@ const DoctorAppointments = () => {
   const [inviteEmail, setInviteEmail] = useState('');
   const [sendingInvite, setSendingInvite] = useState(false);
 
-  // Басқа дәрігермен кездесуді бөлісу үшін
+  // Бөлісу
   const [showShareModal, setShowShareModal] = useState(false);
   const [selectedMeetingToShare, setSelectedMeetingToShare] = useState(null);
   const [doctors, setDoctors] = useState([]);
   const [selectedDoctorId, setSelectedDoctorId] = useState('');
   const [sharing, setSharing] = useState(false);
 
+  // Встреча для подтверждения завершения
+  const [showEndConfirmModal, setShowEndConfirmModal] = useState(false);
+  const [meetingToEnd, setMeetingToEnd] = useState(null);
+
   const { token } = useSelector((state) => state.token);
 
-  // Төлем сомаларының пресеттері
   const presetAmounts = [3000, 5000, 7000, 10000, 15000];
 
-  // Төлем жасау функциясы
+  // ────────────────────────────────────────────────
+  // Хелпер: резолюция статуса встречи для UI
+  // ВРАЧ МОЖЕТ УПРАВЛЯТЬ: SCHEDULED → ACTIVE → COMPLETED
+  // Источник правды — ТОЛЬКО meeting.status из БД
+  // ────────────────────────────────────────────────
+  const resolveMeetingUIStatus = (meeting) => {
+    const s = meeting?.status?.toUpperCase();
+    if (!s) return 'unknown';
+    if (s === 'ACTIVE') return 'active';
+    if (s === 'COMPLETED') return 'completed';
+    if (s === 'CANCELLED') return 'cancelled';
+    return 'scheduled'; // SCHEDULED
+  };
+
+  // ────────────────────────────────────────────────
+  // Төлем жасау
+  // ────────────────────────────────────────────────
   const createPayment = async () => {
     try {
       let amount = paymentAmount;
@@ -94,12 +113,6 @@ const DoctorAppointments = () => {
       setCreatingPayment(true);
       setPaymentError('');
 
-      const userRes = await api.get('/api/v1/users/me', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const user = userRes.data;
-      const doctorId = user?.doctor?.doctorId || user?.userId;
-
       const response = await api.post('/api/payments/create', {
         appointmentId: selectedAppointmentForPayment.id,
         amount: amount,
@@ -112,14 +125,11 @@ const DoctorAppointments = () => {
 
       setPaymentDetails(response.data);
       setPaymentLink(response.data.paymentUrl);
-
       setShowCreatePaymentModal(false);
       setShowPaymentModal(true);
-
       setPaymentAmount(5000);
       setCustomAmount('');
       setIsCustomAmount(false);
-
     } catch (err) {
       console.error('Төлем жасау қатесі:', err);
       setPaymentError(err.response?.data?.error || err.message);
@@ -128,7 +138,6 @@ const DoctorAppointments = () => {
     }
   };
 
-  // Төлем жасау модальды терезесін ашу
   const openCreatePaymentModal = (appointment) => {
     setSelectedAppointmentForPayment(appointment);
     setPaymentAmount(5000);
@@ -138,7 +147,6 @@ const DoctorAppointments = () => {
     setShowCreatePaymentModal(true);
   };
 
-  // Сома таңдау өңдеушісі
   const handleAmountSelect = (amount) => {
     setPaymentAmount(amount);
     setIsCustomAmount(false);
@@ -146,26 +154,19 @@ const DoctorAppointments = () => {
     setPaymentError('');
   };
 
-  // Өз сомасын өзгерту өңдеушісі
   const handleCustomAmountChange = (e) => {
     const value = e.target.value.replace(/[^0-9]/g, '');
     setCustomAmount(value);
-    if (value) {
-      setPaymentAmount(parseInt(value));
-    }
+    if (value) setPaymentAmount(parseInt(value));
     setPaymentError('');
   };
 
-  // Сілтемені көшіру
   const copyLink = (url) => {
-    if (url) {
-      navigator.clipboard.writeText(url);
-      alert('Сілтеме алмасу буферіне көшірілді');
-    }
+    if (url) { navigator.clipboard.writeText(url); alert('Сілтеме алмасу буферіне көшірілді'); }
   };
 
   // ────────────────────────────────────────────────
-  // Дәрігердің деректерін және оның жазбаларын жүктеу
+  // Деректерді жүктеу
   // ────────────────────────────────────────────────
   const fetchData = async () => {
     try {
@@ -191,9 +192,7 @@ const DoctorAppointments = () => {
         })) || [];
 
         setAppointments(normalizedAppointments);
-
         processPatients(normalizedAppointments);
-
         await fetchMeetings(doctorId);
       }
     } catch (err) {
@@ -204,16 +203,11 @@ const DoctorAppointments = () => {
     }
   };
 
-  // ────────────────────────────────────────────────
-  // Жазбалардан пациенттерді өңдеу
-  // ────────────────────────────────────────────────
   const processPatients = (appointmentsList) => {
     const patientsMap = {};
-
     appointmentsList.forEach(app => {
       const pid = app.patientId;
       if (!pid) return;
-
       if (!patientsMap[pid]) {
         patientsMap[pid] = {
           id: pid,
@@ -229,29 +223,17 @@ const DoctorAppointments = () => {
           appointments: []
         };
       }
-
       const patient = patientsMap[pid];
       patient.totalAppointments++;
       patient.appointments.push(app);
-
       if (app.status === 'completed') patient.completedAppointments++;
       if (app.status === 'cancelled') patient.cancelledAppointments++;
       if (app.status === 'scheduled' || app.status === 'confirmed') patient.scheduledAppointments++;
-
       const appDate = new Date(app.appointmentDate);
-      if (!patient.lastVisit || appDate > new Date(patient.lastVisit)) {
-        patient.lastVisit = app.appointmentDate;
-      }
-      if (!patient.firstVisit || appDate < new Date(patient.firstVisit)) {
-        patient.firstVisit = app.appointmentDate;
-      }
+      if (!patient.lastVisit || appDate > new Date(patient.lastVisit)) patient.lastVisit = app.appointmentDate;
+      if (!patient.firstVisit || appDate < new Date(patient.firstVisit)) patient.firstVisit = app.appointmentDate;
     });
-
-    const patientsArray = Object.values(patientsMap).sort((a, b) =>
-      new Date(b.lastVisit) - new Date(a.lastVisit)
-    );
-
-    setPatients(patientsArray);
+    setPatients(Object.values(patientsMap).sort((a, b) => new Date(b.lastVisit) - new Date(a.lastVisit)));
   };
 
   const fetchMeetings = async (doctorId) => {
@@ -269,32 +251,25 @@ const DoctorAppointments = () => {
     }
   };
 
-  // Барлық дәрігерлер тізімін жүктеу
   const fetchDoctors = async () => {
     try {
       const response = await api.get('/api/v1/doctor', {
         headers: { Authorization: `Bearer ${token}` },
       });
-
-      const doctorsData = response.data.map(doctor => {
-        const user = doctor.user || {};
-        return {
-          id: doctor.doctorId,
-          fullName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Дәрігер',
-          email: user.email || '',
-          specialty: doctor.specialty || '—',
-          user: user,
-        };
-      });
-
-      setDoctors(doctorsData);
+      setDoctors(response.data.map(doctor => ({
+        id: doctor.doctorId,
+        fullName: `${doctor.user?.firstName || ''} ${doctor.user?.lastName || ''}`.trim() || 'Дәрігер',
+        email: doctor.user?.email || '',
+        specialty: doctor.specialty || '—',
+        user: doctor.user,
+      })));
     } catch (err) {
       console.error('Дәрігерлер тізімін жүктеу мүмкін болмады:', err);
     }
   };
 
   // ────────────────────────────────────────────────
-  // Қабылдау мәртебесін жаңарту
+  // Жазба статусын жаңарту
   // ────────────────────────────────────────────────
   const updateStatus = async (id, status) => {
     try {
@@ -302,15 +277,9 @@ const DoctorAppointments = () => {
         { status },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setAppointments(prev => prev.map(app =>
-        app.id === id ? { ...app, status } : app
-      ));
-
-      const updatedAppointments = appointments.map(app =>
-        app.id === id ? { ...app, status } : app
-      );
-      processPatients(updatedAppointments);
-
+      const updated = appointments.map(app => app.id === id ? { ...app, status } : app);
+      setAppointments(updated);
+      processPatients(updated);
       alert(`Мәртебе өзгертілді: ${status}`);
     } catch (err) {
       alert('Мәртебені жаңарту қатесі: ' + (err.response?.data?.message || err.message));
@@ -318,7 +287,43 @@ const DoctorAppointments = () => {
   };
 
   // ────────────────────────────────────────────────
-  // Видеокездесу құру
+  // Кездесу статусын жаңарту (SCHEDULED → ACTIVE → COMPLETED)
+  // Только эти переходы; назад — нельзя.
+  // ВАЖНО: Пациент может зайти ТОЛЬКО когда статус ACTIVE
+  // ────────────────────────────────────────────────
+  const updateMeetingStatus = async (meetingId, newStatus) => {
+    try {
+      await api.patch(`/api/v1/meetings/${meetingId}/status`,
+        { status: newStatus },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setMeetings(prev => prev.map(m => m.id === meetingId ? { ...m, status: newStatus } : m));
+      
+      if (newStatus === 'COMPLETED') {
+        alert('Кездесу аяқталды. Пациент енді кіре алмайды.');
+      } else if (newStatus === 'ACTIVE') {
+        alert('Кездесу басталды. Пациент енді қосыла алады.');
+      }
+    } catch (err) {
+      alert('Кездесу мәртебесін өзгерту қатесі');
+    }
+  };
+
+  const handleEndMeeting = (meeting) => {
+    setMeetingToEnd(meeting);
+    setShowEndConfirmModal(true);
+  };
+
+  const confirmEndMeeting = async () => {
+    if (meetingToEnd) {
+      await updateMeetingStatus(meetingToEnd.id, 'COMPLETED');
+      setShowEndConfirmModal(false);
+      setMeetingToEnd(null);
+    }
+  };
+
+  // ────────────────────────────────────────────────
+  // Видеокездесу құру (статус всегда SCHEDULED)
   // ────────────────────────────────────────────────
   const openMeetingModal = async (appointment) => {
     setSelectedAppointment(appointment);
@@ -330,19 +335,10 @@ const DoctorAppointments = () => {
   const sendInvite = async () => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const cleanedEmail = inviteEmail?.trim() || '';
-
-    if (!cleanedEmail) {
-      alert('Пациенттің email-ін енгізіңіз');
-      return;
-    }
-
-    if (!emailRegex.test(cleanedEmail)) {
-      alert('Дұрыс email мекенжайын енгізіңіз');
-      return;
-    }
+    if (!cleanedEmail) { alert('Пациенттің email-ін енгізіңіз'); return; }
+    if (!emailRegex.test(cleanedEmail)) { alert('Дұрыс email мекенжайын енгізіңіз'); return; }
 
     setSendingInvite(true);
-
     try {
       const userRes = await api.get('/api/v1/users/me', {
         headers: { Authorization: `Bearer ${token}` },
@@ -354,24 +350,22 @@ const DoctorAppointments = () => {
         throw new Error('Кездесу құру үшін деректер жеткіліксіз');
       }
 
+      // ВАЖНО: При создании встречи статус всегда SCHEDULED
+      // Пациент НЕ МОЖЕТ зайти, пока врач не нажмет "Бастау"
       const response = await api.post('/api/v1/meetings', {
         appointmentId: Number(selectedAppointment?.id) || 0,
         doctorId: Number(doctorId) || 0,
         patientId: Number(selectedAppointment?.patientId) || 0,
         topic: `${selectedAppointment?.patientName} -мен кеңес`,
         description: 'Дәрігерлік кеңес',
-        // scheduledTime: new Date().toISOString(),
         durationMinutes: 30,
         patientEmail: cleanedEmail,
+        status: 'SCHEDULED' // Явно указываем SCHEDULED
       }, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       });
 
       const meeting = response.data;
-
       setMeetingData({
         meetingUrl: meeting.meetingUrl,
         roomId: meeting.roomId,
@@ -389,7 +383,7 @@ const DoctorAppointments = () => {
   };
 
   // ────────────────────────────────────────────────
-  // Кездесуді басқа дәрігермен бөлісу
+  // Кездесуді бөлісу
   // ────────────────────────────────────────────────
   const openShareModal = (meeting) => {
     setSelectedMeetingToShare(meeting);
@@ -398,92 +392,42 @@ const DoctorAppointments = () => {
   };
 
   const shareMeetingWithDoctor = async () => {
-    if (!selectedDoctorId) {
-      alert('Дәрігерді таңдаңыз');
-      return;
-    }
-
+    if (!selectedDoctorId) { alert('Дәрігерді таңдаңыз'); return; }
     const doctor = doctors.find(d => d.id === parseInt(selectedDoctorId));
-    if (!doctor?.email) {
-      alert('Таңдалған дәрігердің email-і көрсетілмеген');
-      return;
-    }
-
-    if (!selectedMeetingToShare?.meetingUrl) {
-      alert('Кездесу сілтемесі жоқ');
-      return;
-    }
-
+    if (!doctor?.email) { alert('Таңдалған дәрігердің email-і көрсетілмеген'); return; }
+    if (!selectedMeetingToShare?.meetingUrl) { alert('Кездесу сілтемесі жоқ'); return; }
     setSharing(true);
-
     try {
-      const response = await api.get('/api/v1/meetings/share', {
-        params: {
-          email: doctor.email,
-          link: selectedMeetingToShare.meetingUrl,
-        },
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+      await api.get('/api/v1/meetings/share', {
+        params: { email: doctor.email, link: selectedMeetingToShare.meetingUrl },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
       alert(`Сілтеме ${doctor.fullName} (${doctor.email}) мекенжайына сәтті жіберілді`);
       setShowShareModal(false);
       setSelectedDoctorId('');
       setSelectedMeetingToShare(null);
     } catch (err) {
       console.error('Сілтеме жіберу қатесі:', err);
-      const errorMessage = err.response?.data?.message || err.message || 'Белгісіз қате';
-      alert(`Сілтеме жіберу мүмкін болмады\n${errorMessage}`);
+      alert(`Сілтеме жіберу мүмкін болмады\n${err.response?.data?.message || err.message}`);
     } finally {
       setSharing(false);
     }
   };
 
-  const updateMeetingStatus = async (meetingId, status) => {
-    try {
-      await api.patch(`/api/v1/meetings/${meetingId}/status`,
-        { status },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setMeetings(prev => prev.map(m =>
-        m.id === meetingId ? { ...m, status } : m
-      ));
-      alert(`Кездесу мәртебесі өзгертілді: ${status}`);
-    } catch (err) {
-      alert('Кездесу мәртебесін өзгерту қатесі');
-    }
-  };
-
   // ────────────────────────────────────────────────
-  // Пішімдеу және көмекші функциялар
+  // Форматирование
   // ────────────────────────────────────────────────
   const formatDateTime = (dateString) => {
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString('kk-KZ', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch {
-      return dateString || '—';
-    }
+      return date.toLocaleDateString('kk-KZ', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch { return dateString || '—'; }
   };
 
   const formatDate = (dateString) => {
     try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('kk-KZ', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric'
-      });
-    } catch {
-      return dateString || '—';
-    }
+      return new Date(dateString).toLocaleDateString('kk-KZ', { day: 'numeric', month: 'short', year: 'numeric' });
+    } catch { return dateString || '—'; }
   };
 
   const getAppointmentStatusText = (status) => {
@@ -507,7 +451,7 @@ const DoctorAppointments = () => {
   };
 
   const getMeetingStatusText = (status) => {
-    switch (status) {
+    switch (status?.toUpperCase()) {
       case 'SCHEDULED': return 'Жоспарланған';
       case 'ACTIVE': return 'Белсенді';
       case 'COMPLETED': return 'Аяқталған';
@@ -517,7 +461,7 @@ const DoctorAppointments = () => {
   };
 
   const getMeetingStatusColor = (status) => {
-    switch (status) {
+    switch (status?.toUpperCase()) {
       case 'SCHEDULED': return 'bg-blue-100 text-blue-800 border border-blue-200';
       case 'ACTIVE': return 'bg-green-100 text-green-800 border border-green-200';
       case 'COMPLETED': return 'bg-gray-100 text-gray-800 border border-gray-200';
@@ -531,15 +475,12 @@ const DoctorAppointments = () => {
   // ────────────────────────────────────────────────
   const getFilteredPatients = () => {
     let filtered = patients;
-
-    if (patientFilter === 'frequent') {
-      filtered = filtered.filter(p => p.totalAppointments >= 3);
-    } else if (patientFilter === 'recent') {
+    if (patientFilter === 'frequent') filtered = filtered.filter(p => p.totalAppointments >= 3);
+    else if (patientFilter === 'recent') {
       const oneMonthAgo = new Date();
       oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
       filtered = filtered.filter(p => new Date(p.lastVisit) >= oneMonthAgo);
     }
-
     if (patientSearchQuery.trim()) {
       const query = patientSearchQuery.toLowerCase();
       filtered = filtered.filter(p =>
@@ -548,18 +489,11 @@ const DoctorAppointments = () => {
         p.phone?.includes(query)
       );
     }
-
     return filtered;
   };
 
-  // ────────────────────────────────────────────────
-  // Эффекттер
-  // ────────────────────────────────────────────────
   useEffect(() => {
-    if (token) {
-      fetchData();
-      fetchDoctors();
-    }
+    if (token) { fetchData(); fetchDoctors(); }
   }, [token]);
 
   const filteredApps = appointments.filter(app => {
@@ -588,59 +522,33 @@ const DoctorAppointments = () => {
             className="mt-4 md:mt-0 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-200 flex items-center shadow-md hover:shadow-lg"
             disabled={loading}
           >
-            {loading ? (
-              <>
-                <FaSpinner className="animate-spin mr-2" />
-                Жүктелуде...
-              </>
-            ) : (
-              <>
-                <FaCalendar className="mr-2" /> Жаңарту
-              </>
-            )}
+            {loading ? <><FaSpinner className="animate-spin mr-2" />Жүктелуде...</> : <><FaCalendar className="mr-2" /> Жаңарту</>}
           </button>
         </div>
 
-        {/* Қойындылар */}
+        {/* Табы */}
         <div className="bg-white rounded-2xl p-2 shadow-sm border border-gray-100">
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setActiveTab('appointments')}
-              className={`px-5 py-3 rounded-xl flex items-center transition-all font-medium ${activeTab === 'appointments'
-                ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md'
-                : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
-                }`}
+              className={`px-5 py-3 rounded-xl flex items-center transition-all font-medium ${activeTab === 'appointments' ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}
             >
               <FaCalendar className="mr-2" /> Қабылдау жазбалары
-              <span className="ml-2 px-2 py-0.5 bg-white/20 rounded-full text-xs">
-                {filteredApps.length}
-              </span>
+              <span className="ml-2 px-2 py-0.5 bg-white/20 rounded-full text-xs">{filteredApps.length}</span>
             </button>
-
             <button
               onClick={() => setActiveTab('patients')}
-              className={`px-5 py-3 rounded-xl flex items-center transition-all font-medium ${activeTab === 'patients'
-                ? 'bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shadow-md'
-                : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
-                }`}
+              className={`px-5 py-3 rounded-xl flex items-center transition-all font-medium ${activeTab === 'patients' ? 'bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}
             >
               <FaUsers className="mr-2" /> Менің пациенттерім
-              <span className="ml-2 px-2 py-0.5 bg-white/20 rounded-full text-xs">
-                {patients.length}
-              </span>
+              <span className="ml-2 px-2 py-0.5 bg-white/20 rounded-full text-xs">{patients.length}</span>
             </button>
-
             <button
               onClick={() => setActiveTab('meetings')}
-              className={`px-5 py-3 rounded-xl flex items-center transition-all font-medium ${activeTab === 'meetings'
-                ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-md'
-                : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
-                }`}
+              className={`px-5 py-3 rounded-xl flex items-center transition-all font-medium ${activeTab === 'meetings' ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}
             >
               <FaVideo className="mr-2" /> Видеокездесулер
-              <span className="ml-2 px-2 py-0.5 bg-white/20 rounded-full text-xs">
-                {meetings.length}
-              </span>
+              <span className="ml-2 px-2 py-0.5 bg-white/20 rounded-full text-xs">{meetings.length}</span>
             </button>
           </div>
         </div>
@@ -651,45 +559,29 @@ const DoctorAppointments = () => {
       {/* ════════════════════════════════════════════ */}
       {activeTab === 'appointments' && (
         <>
-          {/* Жазбалар сүзгілері */}
           <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-6">
             <div className="flex items-center mb-3">
               <FaFilter className="text-gray-500 mr-2" />
               <span className="font-medium text-gray-700">Сүзгілер:</span>
             </div>
             <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setFilter('all')}
-                className={`px-4 py-2.5 rounded-xl flex items-center transition-all ${filter === 'all' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
-                  }`}
-              >
-                <FaCalendar className="mr-2" /> Барлық жазбалар
-              </button>
-              <button
-                onClick={() => setFilter('active')}
-                className={`px-4 py-2.5 rounded-xl flex items-center transition-all ${filter === 'active' ? 'bg-green-600 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
-                  }`}
-              >
-                <FaCheckCircle className="mr-2" /> Белсенді
-              </button>
-              <button
-                onClick={() => setFilter('completed')}
-                className={`px-4 py-2.5 rounded-xl flex items-center transition-all ${filter === 'completed' ? 'bg-gray-600 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
-                  }`}
-              >
-                <FaCheck className="mr-2" /> Аяқталған
-              </button>
-              <button
-                onClick={() => setFilter('cancelled')}
-                className={`px-4 py-2.5 rounded-xl flex items-center transition-all ${filter === 'cancelled' ? 'bg-red-600 text-white shadow-md' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
-                  }`}
-              >
-                <FaTimes className="mr-2" /> Болдырылмаған
-              </button>
+              {[
+                { key: 'all', label: 'Барлық жазбалар', color: 'bg-blue-600', icon: <FaCalendar className="mr-2" /> },
+                { key: 'active', label: 'Белсенді', color: 'bg-green-600', icon: <FaCheckCircle className="mr-2" /> },
+                { key: 'completed', label: 'Аяқталған', color: 'bg-gray-600', icon: <FaCheck className="mr-2" /> },
+                { key: 'cancelled', label: 'Болдырылмаған', color: 'bg-red-600', icon: <FaTimes className="mr-2" /> },
+              ].map(({ key, label, color, icon }) => (
+                <button
+                  key={key}
+                  onClick={() => setFilter(key)}
+                  className={`px-4 py-2.5 rounded-xl flex items-center transition-all ${filter === key ? `${color} text-white shadow-md` : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}
+                >
+                  {icon}{label}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Жазбалар тізімі */}
           <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
             <div className="p-6 border-b border-gray-100">
               <div className="flex items-center justify-between">
@@ -740,12 +632,10 @@ const DoctorAppointments = () => {
                               )}
                             </div>
                           </div>
-
                           <div className="flex items-center text-gray-600 text-sm mb-3">
                             <FaClock className="mr-1.5 text-gray-400" />
                             <span className="font-medium">{formatDateTime(app.appointmentDate)}</span>
                           </div>
-
                           <span className={`px-3 py-1.5 rounded-lg text-sm font-medium inline-flex items-center ${getAppointmentStatusColor(app.status)}`}>
                             {app.status === 'confirmed' && <FaCheckCircle className="mr-1.5" size={12} />}
                             {app.status === 'cancelled' && <FaTimes className="mr-1.5" size={12} />}
@@ -756,33 +646,21 @@ const DoctorAppointments = () => {
                         <div className="flex flex-col space-y-2 min-w-[180px]">
                           {app.status === 'scheduled' && (
                             <>
-                              <button
-                                onClick={() => updateStatus(app.id, 'confirmed')}
-                                className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 text-sm font-medium"
-                              >
-                                <FaCheck className="mr-2 inline" /> Растау
+                              <button onClick={() => updateStatus(app.id, 'confirmed')} className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 text-sm font-medium flex items-center justify-center">
+                                <FaCheck className="mr-2" /> Растау
                               </button>
-                              <button
-                                onClick={() => updateStatus(app.id, 'cancelled')}
-                                className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 text-sm font-medium"
-                              >
-                                <FaTimes className="mr-2 inline" /> Болдырмау
+                              <button onClick={() => updateStatus(app.id, 'cancelled')} className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 text-sm font-medium flex items-center justify-center">
+                                <FaTimes className="mr-2" /> Болдырмау
                               </button>
                             </>
                           )}
 
                           {app.status === 'confirmed' && (
                             <>
-                              <button
-                                onClick={() => updateStatus(app.id, 'completed')}
-                                className="px-4 py-2 bg-gray-700 text-white rounded-xl hover:bg-gray-800 text-sm font-medium flex items-center"
-                              >
+                              <button onClick={() => updateStatus(app.id, 'completed')} className="px-4 py-2 bg-gray-700 text-white rounded-xl hover:bg-gray-800 text-sm font-medium flex items-center justify-center">
                                 <FaCheckCircle className="mr-2" /> Аяқтау
                               </button>
-                              <button
-                                onClick={() => openMeetingModal(app)}
-                                className="px-4 py-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700 text-sm font-medium flex items-center"
-                              >
+                              <button onClick={() => openMeetingModal(app)} className="px-4 py-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700 text-sm font-medium flex items-center justify-center">
                                 <FaVideo className="mr-2" /> Видеокездесу
                               </button>
                             </>
@@ -795,11 +673,9 @@ const DoctorAppointments = () => {
                                 disabled={creatingPayment && selectedAppointmentForPayment?.id === app.id}
                                 className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 text-sm font-medium flex items-center justify-center"
                               >
-                                {creatingPayment && selectedAppointmentForPayment?.id === app.id ? (
-                                  <><FaSpinner className="animate-spin mr-2" /> Жасалуда...</>
-                                ) : (
-                                  <><FaCreditCard className="mr-2" /> Шот ұсыну</>
-                                )}
+                                {creatingPayment && selectedAppointmentForPayment?.id === app.id
+                                  ? <><FaSpinner className="animate-spin mr-2" /> Жасалуда...</>
+                                  : <><FaCreditCard className="mr-2" /> Шот ұсыну</>}
                               </button>
                               <button
                                 onClick={() => navigate(`/diagnosis/create?patientId=${app.patientId}&appointmentId=${app.id}&patientName=${encodeURIComponent(app.patientName)}`)}
@@ -813,7 +689,7 @@ const DoctorAppointments = () => {
                             </>
                           )}
 
-                          {(app.status === 'cancelled') && (
+                          {app.status === 'cancelled' && (
                             <div className="text-center p-2 text-sm font-medium text-red-600">
                               Қабылдау болдырылды
                             </div>
@@ -834,13 +710,11 @@ const DoctorAppointments = () => {
       {/* ════════════════════════════════════════════ */}
       {activeTab === 'patients' && (
         <>
-          {/* Пациенттерді сүзгілеу және іздеу */}
           <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  <FaSearch className="inline mr-2" />
-                  Пациентті іздеу:
+                  <FaSearch className="inline mr-2" />Пациентті іздеу:
                 </label>
                 <input
                   type="text"
@@ -850,42 +724,29 @@ const DoctorAppointments = () => {
                   className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-emerald-500"
                 />
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  <FaFilter className="inline mr-2" />
-                  Санат:
+                  <FaFilter className="inline mr-2" />Санат:
                 </label>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => setPatientFilter('all')}
-                    className={`flex-1 px-4 py-2.5 rounded-xl transition-all text-sm font-medium ${patientFilter === 'all' ? 'bg-emerald-600 text-white' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
-                      }`}
-                  >
-                    Барлығы
-                  </button>
-                  <button
-                    onClick={() => setPatientFilter('frequent')}
-                    className={`flex-1 px-4 py-2.5 rounded-xl transition-all text-sm font-medium ${patientFilter === 'frequent' ? 'bg-emerald-600 text-white' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
-                      }`}
-                  >
-                    <FaStar className="inline mr-1" />
-                    Жиі (≥3)
-                  </button>
-                  <button
-                    onClick={() => setPatientFilter('recent')}
-                    className={`flex-1 px-4 py-2.5 rounded-xl transition-all text-sm font-medium ${patientFilter === 'recent' ? 'bg-emerald-600 text-white' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
-                      }`}
-                  >
-                    <FaClock className="inline mr-1" />
-                    Жақында
-                  </button>
+                  {[
+                    { key: 'all', label: 'Барлығы' },
+                    { key: 'frequent', label: 'Жиі (≥3)', icon: <FaStar className="inline mr-1" /> },
+                    { key: 'recent', label: 'Жақында', icon: <FaClock className="inline mr-1" /> },
+                  ].map(({ key, label, icon }) => (
+                    <button
+                      key={key}
+                      onClick={() => setPatientFilter(key)}
+                      className={`flex-1 px-4 py-2.5 rounded-xl transition-all text-sm font-medium ${patientFilter === key ? 'bg-emerald-600 text-white' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}
+                    >
+                      {icon}{label}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Пациенттер тізімі */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-1">
               <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
@@ -893,16 +754,12 @@ const DoctorAppointments = () => {
                   <div className="flex items-center justify-between">
                     <div>
                       <h2 className="text-xl font-bold text-gray-800 flex items-center">
-                        <FaUsers className="mr-2 text-emerald-600" />
-                        Пациенттер
+                        <FaUsers className="mr-2 text-emerald-600" />Пациенттер
                       </h2>
-                      <p className="text-sm text-gray-600 mt-1">
-                        Табылды: {filteredPatients.length}
-                      </p>
+                      <p className="text-sm text-gray-600 mt-1">Табылды: {filteredPatients.length}</p>
                     </div>
                   </div>
                 </div>
-
                 <div className="max-h-[700px] overflow-y-auto">
                   {loading ? (
                     <div className="py-12 text-center">
@@ -912,8 +769,7 @@ const DoctorAppointments = () => {
                   ) : filteredPatients.length === 0 ? (
                     <div className="py-12 text-center px-4">
                       <FaUsers className="text-4xl mx-auto text-gray-400 mb-3" />
-                      <h3 className="text-lg font-medium text-gray-700 mb-2">Пациенттер жоқ</h3>
-                      <p className="text-gray-500 text-sm">Сүзгілерді немесе іздеуді өзгертіңіз</p>
+                      <p className="text-gray-500 text-sm">Пациенттер жоқ</p>
                     </div>
                   ) : (
                     <div className="p-3 space-y-2">
@@ -921,30 +777,17 @@ const DoctorAppointments = () => {
                         <button
                           key={patient.id}
                           onClick={() => setSelectedPatient(patient)}
-                          className={`w-full text-left p-4 rounded-xl transition-all border-2 ${selectedPatient?.id === patient.id
-                            ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white border-emerald-600 shadow-lg'
-                            : 'bg-gray-50 hover:bg-emerald-50 border-gray-100 hover:border-emerald-200'
-                            }`}
+                          className={`w-full text-left p-4 rounded-xl transition-all border-2 ${selectedPatient?.id === patient.id ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white border-emerald-600 shadow-lg' : 'bg-gray-50 hover:bg-emerald-50 border-gray-100 hover:border-emerald-200'}`}
                         >
                           <div className="flex items-center justify-between mb-2">
-                            <h3 className={`font-bold text-base ${selectedPatient?.id === patient.id ? 'text-white' : 'text-gray-800'
-                              }`}>
-                              {patient.name}
-                            </h3>
-                            {patient.totalAppointments >= 5 && (
-                              <FaStar className={`${selectedPatient?.id === patient.id ? 'text-yellow-300' : 'text-yellow-500'
-                                }`} />
-                            )}
+                            <h3 className={`font-bold text-base ${selectedPatient?.id === patient.id ? 'text-white' : 'text-gray-800'}`}>{patient.name}</h3>
+                            {patient.totalAppointments >= 5 && <FaStar className={selectedPatient?.id === patient.id ? 'text-yellow-300' : 'text-yellow-500'} />}
                           </div>
-                          <div className={`flex items-center text-sm mb-1 ${selectedPatient?.id === patient.id ? 'text-emerald-50' : 'text-gray-600'
-                            }`}>
-                            <FaCalendar className="mr-2" size={12} />
-                            <span>{patient.totalAppointments} қабылдау</span>
+                          <div className={`flex items-center text-sm mb-1 ${selectedPatient?.id === patient.id ? 'text-emerald-50' : 'text-gray-600'}`}>
+                            <FaCalendar className="mr-2" size={12} /><span>{patient.totalAppointments} қабылдау</span>
                           </div>
-                          <div className={`flex items-center text-sm ${selectedPatient?.id === patient.id ? 'text-emerald-50' : 'text-gray-500'
-                            }`}>
-                            <FaClock className="mr-2" size={12} />
-                            <span>Соңғысы: {formatDate(patient.lastVisit)}</span>
+                          <div className={`flex items-center text-sm ${selectedPatient?.id === patient.id ? 'text-emerald-50' : 'text-gray-500'}`}>
+                            <FaClock className="mr-2" size={12} /><span>Соңғысы: {formatDate(patient.lastVisit)}</span>
                           </div>
                         </button>
                       ))}
@@ -959,84 +802,42 @@ const DoctorAppointments = () => {
                 {selectedPatient ? (
                   <>
                     <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-emerald-500 to-teal-500 text-white">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center">
-                          <div className="p-3 bg-white/20 rounded-2xl mr-4 backdrop-blur-sm">
-                            <FaUserInjured className="text-3xl text-white" />
-                          </div>
-                          <div>
-                            <h2 className="text-2xl font-bold mb-2">{selectedPatient.name}</h2>
-                            <div className="space-y-1">
-                              {selectedPatient.email && (
-                                <p className="text-emerald-50 text-sm flex items-center">
-                                  <FaEnvelope className="mr-2" size={14} />
-                                  {selectedPatient.email}
-                                </p>
-                              )}
-                              {selectedPatient.phone && (
-                                <p className="text-emerald-50 text-sm flex items-center">
-                                  <FaPhone className="mr-2" size={14} />
-                                  {selectedPatient.phone}
-                                </p>
-                              )}
-                            </div>
-                          </div>
+                      <div className="flex items-center">
+                        <div className="p-3 bg-white/20 rounded-2xl mr-4 backdrop-blur-sm">
+                          <FaUserInjured className="text-3xl text-white" />
+                        </div>
+                        <div>
+                          <h2 className="text-2xl font-bold mb-2">{selectedPatient.name}</h2>
+                          {selectedPatient.email && (
+                            <p className="text-emerald-50 text-sm flex items-center"><FaEnvelope className="mr-2" size={14} />{selectedPatient.email}</p>
+                          )}
+                          {selectedPatient.phone && (
+                            <p className="text-emerald-50 text-sm flex items-center mt-1"><FaPhone className="mr-2" size={14} />{selectedPatient.phone}</p>
+                          )}
                         </div>
                       </div>
                     </div>
-
-                    <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
+                    <div className="p-6 border-b border-gray-100">
                       <h3 className="font-bold text-gray-800 mb-4 flex items-center text-lg">
-                        <FaChartLine className="mr-2 text-emerald-600" />
-                        Келу статистикасы
+                        <FaChartLine className="mr-2 text-emerald-600" />Келу статистикасы
                       </h3>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="bg-white p-4 rounded-xl border-2 border-blue-100 text-center">
-                          <div className="text-3xl font-bold text-blue-600 mb-1">
-                            {selectedPatient.totalAppointments}
+                        {[
+                          { value: selectedPatient.totalAppointments, label: 'Барлық қабылдау', color: 'border-blue-100 text-blue-600' },
+                          { value: selectedPatient.completedAppointments, label: 'Аяқталған', color: 'border-green-100 text-green-600' },
+                          { value: selectedPatient.scheduledAppointments, label: 'Жоспарланған', color: 'border-yellow-100 text-yellow-600' },
+                          { value: selectedPatient.cancelledAppointments, label: 'Болдырылмаған', color: 'border-red-100 text-red-600' },
+                        ].map(({ value, label, color }) => (
+                          <div key={label} className={`bg-white p-4 rounded-xl border-2 text-center ${color}`}>
+                            <div className="text-3xl font-bold mb-1">{value}</div>
+                            <div className="text-xs text-gray-600 font-medium">{label}</div>
                           </div>
-                          <div className="text-xs text-gray-600 font-medium">Барлық қабылдау</div>
-                        </div>
-                        <div className="bg-white p-4 rounded-xl border-2 border-green-100 text-center">
-                          <div className="text-3xl font-bold text-green-600 mb-1">
-                            {selectedPatient.completedAppointments}
-                          </div>
-                          <div className="text-xs text-gray-600 font-medium">Аяқталған</div>
-                        </div>
-                        <div className="bg-white p-4 rounded-xl border-2 border-yellow-100 text-center">
-                          <div className="text-3xl font-bold text-yellow-600 mb-1">
-                            {selectedPatient.scheduledAppointments}
-                          </div>
-                          <div className="text-xs text-gray-600 font-medium">Жоспарланған</div>
-                        </div>
-                        <div className="bg-white p-4 rounded-xl border-2 border-red-100 text-center">
-                          <div className="text-3xl font-bold text-red-600 mb-1">
-                            {selectedPatient.cancelledAppointments}
-                          </div>
-                          <div className="text-xs text-gray-600 font-medium">Болдырылмаған</div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4 mt-4">
-                        <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-4 rounded-xl border border-purple-200">
-                          <div className="text-sm text-gray-600 mb-1 font-medium">Бірінші келу</div>
-                          <div className="text-lg font-bold text-purple-700">
-                            {formatDate(selectedPatient.firstVisit)}
-                          </div>
-                        </div>
-                        <div className="bg-gradient-to-r from-cyan-50 to-blue-50 p-4 rounded-xl border border-cyan-200">
-                          <div className="text-sm text-gray-600 mb-1 font-medium">Соңғы келу</div>
-                          <div className="text-lg font-bold text-cyan-700">
-                            {formatDate(selectedPatient.lastVisit)}
-                          </div>
-                        </div>
+                        ))}
                       </div>
                     </div>
-
                     <div className="p-6">
                       <h3 className="font-bold text-gray-800 mb-4 flex items-center text-lg">
-                        <FaHistory className="mr-2 text-emerald-600" />
-                        Қабылдау тарихы ({selectedPatient.appointments.length})
+                        <FaHistory className="mr-2 text-emerald-600" />Қабылдау тарихы ({selectedPatient.appointments.length})
                       </h3>
                       <div className="max-h-[400px] overflow-y-auto space-y-3">
                         {selectedPatient.appointments
@@ -1053,9 +854,7 @@ const DoctorAppointments = () => {
                                 </span>
                               </div>
                               {app.notes && (
-                                <div className="text-sm text-gray-600 mt-2 p-2 bg-white rounded-lg border border-gray-100">
-                                  {app.notes}
-                                </div>
+                                <div className="text-sm text-gray-600 mt-2 p-2 bg-white rounded-lg border border-gray-100">{app.notes}</div>
                               )}
                             </div>
                           ))}
@@ -1088,7 +887,7 @@ const DoctorAppointments = () => {
                 </div>
                 <div>
                   <h2 className="text-xl font-bold text-gray-800">Видеокездесулер</h2>
-                  <p className="text-sm text-gray-500">Құрылған кеңестер</p>
+                  <p className="text-sm text-gray-500">Статус БД-дан алынады — дәрігер басқарады</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -1114,103 +913,141 @@ const DoctorAppointments = () => {
               </div>
             ) : (
               <div className="space-y-4">
-                {meetings.map(meeting => (
-                  <div key={meeting.id} className="bg-gray-50 rounded-xl p-4 hover:bg-purple-50 transition-all border border-gray-100">
-                    <div className="mb-3">
-                      <h3 className="font-bold text-gray-800 text-lg mb-1">
-                        {meeting.topic || 'Кеңес'}
-                      </h3>
-                      {meeting.patientEmail && (
-                        <p className="text-gray-600 text-sm flex items-center">
-                          <FaEnvelope className="mr-1.5 text-gray-400" size={12} />
-                          {meeting.patientEmail}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="flex flex-wrap items-center justify-between mb-4">
-                      <div className="flex items-center text-gray-600 text-sm">
-                        <FaClock className="mr-1.5 text-gray-400" />
-                        <span>{formatDateTime(meeting.scheduledTime || meeting.createdAt)}</span>
+                {meetings.map(meeting => {
+                  const uiStatus = resolveMeetingUIStatus(meeting);
+                  return (
+                    <div key={meeting.id} className="bg-gray-50 rounded-xl p-4 hover:bg-purple-50 transition-all border border-gray-100">
+                      <div className="mb-3">
+                        <h3 className="font-bold text-gray-800 text-lg mb-1">{meeting.topic || 'Кеңес'}</h3>
+                        {meeting.patientEmail && (
+                          <p className="text-gray-600 text-sm flex items-center">
+                            <FaEnvelope className="mr-1.5 text-gray-400" size={12} />
+                            {meeting.patientEmail}
+                          </p>
+                        )}
                       </div>
-                      <span className={`px-3 py-1.5 rounded-lg text-sm font-medium ${getMeetingStatusColor(meeting.status)}`}>
-                        {getMeetingStatusText(meeting.status)}
-                      </span>
-                    </div>
 
-                    <div className="flex flex-wrap gap-2">
-                      {meeting.status === 'SCHEDULED' && (
-                        <>
-                          <button
-                            onClick={() => updateMeetingStatus(meeting.id, 'ACTIVE')}
-                            className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 text-sm font-medium flex items-center"
-                          >
-                            <FaPlay className="mr-2" /> Бастау
-                          </button>
-                          {meeting.meetingUrl && (
+                      <div className="flex flex-wrap items-center justify-between mb-4">
+                        <div className="flex items-center text-gray-600 text-sm">
+                          <FaClock className="mr-1.5 text-gray-400" />
+                          <span>{formatDateTime(meeting.scheduledTime || meeting.createdAt)}</span>
+                        </div>
+                        <span className={`px-3 py-1.5 rounded-lg text-sm font-medium ${getMeetingStatusColor(meeting.status)}`}>
+                          {getMeetingStatusText(meeting.status)}
+                        </span>
+                      </div>
+
+                      {/* ── КНОПКИ СТРОГО ПО СТАТУСУ ── */}
+                      <div className="flex flex-wrap gap-2">
+                        {/* SCHEDULED → врач может начать и открыть ссылку */}
+                        {uiStatus === 'scheduled' && (
+                          <>
+                            <button
+                              onClick={() => updateMeetingStatus(meeting.id, 'ACTIVE')}
+                              className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 text-sm font-medium flex items-center"
+                            >
+                              <FaPlay className="mr-2" /> Бастау
+                            </button>
+                            {meeting.meetingUrl && (
+                              <button
+                                onClick={() => window.open(meeting.meetingUrl, '_blank')}
+                                className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-sm font-medium flex items-center"
+                              >
+                                <FaVideo className="mr-2" /> Сілтемені ашу
+                              </button>
+                            )}
+                          </>
+                        )}
+
+                        {/* ACTIVE → можно подключиться, завершить, поделиться */}
+                        {uiStatus === 'active' && meeting.meetingUrl && (
+                          <>
                             <button
                               onClick={() => window.open(meeting.meetingUrl, '_blank')}
-                              className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-sm font-medium flex items-center"
+                              className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 text-sm font-medium flex items-center"
                             >
                               <FaVideo className="mr-2" /> Қосылу
                             </button>
-                          )}
-                        </>
-                      )}
+                            <button
+                              onClick={() => handleEndMeeting(meeting)}
+                              className="px-4 py-2 bg-gray-700 text-white rounded-xl hover:bg-gray-800 text-sm font-medium flex items-center"
+                            >
+                              <FaStop className="mr-2" /> Аяқтау
+                            </button>
+                            <button
+                              onClick={() => copyLink(meeting.meetingUrl)}
+                              className="px-4 py-2 bg-gray-600 text-white rounded-xl hover:bg-gray-700 text-sm font-medium flex items-center"
+                            >
+                              <FaCopy className="mr-2" /> Көшіру
+                            </button>
+                            <button
+                              onClick={() => openShareModal(meeting)}
+                              className="px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 text-sm font-medium flex items-center"
+                            >
+                              <FaShare className="mr-2" /> Бөлісу
+                            </button>
+                          </>
+                        )}
 
-                      {meeting.status === 'ACTIVE' && meeting.meetingUrl && (
-                        <>
-                          <button
-                            onClick={() => updateMeetingStatus(meeting.id, 'COMPLETED')}
-                            className="px-4 py-2 bg-gray-700 text-white rounded-xl hover:bg-gray-800 text-sm font-medium flex items-center"
-                          >
-                            <FaStop className="mr-2" /> Аяқтау
-                          </button>
-                          <button
-                            onClick={() => window.open(meeting.meetingUrl, '_blank')}
-                            className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 text-sm font-medium flex items-center"
-                          >
-                            <FaVideo className="mr-2" /> Қосылу
-                          </button>
-                          <button
-                            onClick={() => copyLink(meeting.meetingUrl)}
-                            className="px-4 py-2 bg-gray-600 text-white rounded-xl hover:bg-gray-700 text-sm font-medium flex items-center"
-                          >
-                            <FaCopy className="mr-2" /> Көшіру
-                          </button>
-                          <button
-                            onClick={() => openShareModal(meeting)}
-                            className="px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 text-sm font-medium flex items-center"
-                          >
-                            <FaShare className="mr-2" /> Бөлісу
-                          </button>
-                        </>
-                      )}
+                        {/* COMPLETED → только информация */}
+                        {uiStatus === 'completed' && (
+                          <div className="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium flex items-center gap-2">
+                            <FaCheck className="text-gray-500" /> Кездесу аяқталды
+                          </div>
+                        )}
 
-                      {/* {meeting.status === 'COMPLETED' && meeting.meetingUrl && (
-                        <button
-                          onClick={() => window.open(meeting.meetingUrl, '_blank')}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-sm font-medium flex items-center"
-                        >
-                          <FaVideo className="mr-2" /> Жазбаны ашу
-                        </button>
-                      )} */}
-
-                      {meeting.status === 'CANCELLED' && (
-                        <div className="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium">
-                          Кездесу болдырылды
-                        </div>
-                      )}
+                        {/* CANCELLED */}
+                        {uiStatus === 'cancelled' && (
+                          <div className="px-4 py-2 bg-red-50 text-red-600 rounded-xl text-sm font-medium flex items-center gap-2 border border-red-200">
+                            <FaTimes /> Кездесу болдырылды
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* ТӨЛЕМ ЖАСАУ МОДАЛЬДЫ ТЕРЕЗЕСІ */}
+      {/* ════════════════════════════════════════════ */}
+      {/* МОДАЛЬ: АЯҚТАУДЫ РАСТАУ */}
+      {/* ════════════════════════════════════════════ */}
+      {showEndConfirmModal && meetingToEnd && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-sm w-full shadow-2xl p-6">
+            <div className="flex items-center mb-4">
+              <div className="p-3 bg-red-100 rounded-xl mr-3">
+                <FaStop className="text-red-600 text-xl" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-800">Кездесуді аяқтау</h2>
+            </div>
+            <p className="text-gray-600 mb-6">
+              Кездесуді аяқтағаннан кейін пациент сілтеме арқылы кіре алмайды. Растайсыз ба?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={confirmEndMeeting}
+                className="flex-1 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 font-medium flex items-center justify-center gap-2"
+              >
+                <FaStop /> Аяқтау
+              </button>
+              <button
+                onClick={() => { setShowEndConfirmModal(false); setMeetingToEnd(null); }}
+                className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200"
+              >
+                Болдырмау
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════ */}
+      {/* МОДАЛЬ: ШАБЛОН ЖАСАУ */}
+      {/* ════════════════════════════════════════════ */}
       {showCreatePaymentModal && selectedAppointmentForPayment && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
@@ -1226,11 +1063,7 @@ const DoctorAppointments = () => {
                   </div>
                 </div>
                 <button
-                  onClick={() => {
-                    setShowCreatePaymentModal(false);
-                    setSelectedAppointmentForPayment(null);
-                    setPaymentError('');
-                  }}
+                  onClick={() => { setShowCreatePaymentModal(false); setSelectedAppointmentForPayment(null); setPaymentError(''); }}
                   className="p-2 hover:bg-white/20 rounded-xl transition-colors text-white"
                   disabled={creatingPayment}
                 >
@@ -1240,7 +1073,6 @@ const DoctorAppointments = () => {
             </div>
 
             <div className="p-6">
-              {/* Пациент туралы ақпарат */}
               <div className="bg-blue-50 rounded-xl p-4 mb-6 border border-blue-100">
                 <div className="flex items-center">
                   <div className="p-2 bg-white rounded-lg mr-3 border border-blue-200">
@@ -1255,27 +1087,19 @@ const DoctorAppointments = () => {
                 </div>
               </div>
 
-              {/* Сома таңдау */}
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Соманы таңдаңыз
-              </label>
-
+              <label className="block text-sm font-medium text-gray-700 mb-3">Соманы таңдаңыз</label>
               <div className="grid grid-cols-3 gap-2 mb-4">
                 {presetAmounts.map((preset) => (
                   <button
                     key={preset}
                     onClick={() => handleAmountSelect(preset)}
-                    className={`py-3 px-2 rounded-xl font-medium transition-all ${!isCustomAmount && paymentAmount === preset
-                        ? 'bg-green-600 text-white shadow-md ring-2 ring-green-300'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
-                      }`}
+                    className={`py-3 px-2 rounded-xl font-medium transition-all ${!isCustomAmount && paymentAmount === preset ? 'bg-green-600 text-white shadow-md ring-2 ring-green-300' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'}`}
                   >
                     {preset.toLocaleString()} ₸
                   </button>
                 ))}
               </div>
 
-              {/* Өз сомасы */}
               <div className="mb-4">
                 <div className="flex items-center mb-2">
                   <input
@@ -1284,20 +1108,13 @@ const DoctorAppointments = () => {
                     checked={isCustomAmount}
                     onChange={(e) => {
                       setIsCustomAmount(e.target.checked);
-                      if (!e.target.checked) {
-                        setPaymentAmount(5000);
-                        setCustomAmount('');
-                      } else {
-                        setPaymentAmount(0);
-                      }
+                      if (!e.target.checked) { setPaymentAmount(5000); setCustomAmount(''); }
+                      else setPaymentAmount(0);
                     }}
                     className="w-4 h-4 text-green-600 rounded focus:ring-green-500 mr-2"
                   />
-                  <label htmlFor="customAmount" className="text-sm text-gray-700">
-                    Өз сомасы
-                  </label>
+                  <label htmlFor="customAmount" className="text-sm text-gray-700">Өз сомасы</label>
                 </div>
-
                 {isCustomAmount && (
                   <div className="relative">
                     <input
@@ -1313,51 +1130,27 @@ const DoctorAppointments = () => {
                 )}
               </div>
 
-              {/* Қорытынды сома */}
               <div className="bg-blue-50 rounded-xl p-4 mb-6 border border-blue-100">
                 <div className="flex justify-between items-center">
                   <span className="text-gray-700 font-medium">Төлеуге жататын сома:</span>
-                  <span className="text-2xl font-bold text-gray-800">
-                    {paymentAmount?.toLocaleString() || 0} ₸
-                  </span>
+                  <span className="text-2xl font-bold text-gray-800">{paymentAmount?.toLocaleString() || 0} ₸</span>
                 </div>
               </div>
 
-              {/* Қате */}
               {paymentError && (
-                <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-xl text-sm border border-red-200">
-                  {paymentError}
-                </div>
+                <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-xl text-sm border border-red-200">{paymentError}</div>
               )}
 
-              {/* Түймелер */}
               <div className="flex gap-3">
                 <button
                   onClick={createPayment}
                   disabled={creatingPayment || (isCustomAmount && !customAmount)}
-                  className={`flex-1 py-3 rounded-xl text-white font-medium flex items-center justify-center ${creatingPayment || (isCustomAmount && !customAmount)
-                      ? 'bg-gray-400 cursor-not-allowed'
-                      : 'bg-green-600 hover:bg-green-700'
-                    }`}
+                  className={`flex-1 py-3 rounded-xl text-white font-medium flex items-center justify-center ${creatingPayment || (isCustomAmount && !customAmount) ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}
                 >
-                  {creatingPayment ? (
-                    <>
-                      <FaSpinner className="animate-spin mr-2" />
-                      Жасалуда...
-                    </>
-                  ) : (
-                    <>
-                      <FaCreditCard className="mr-2" />
-                      Шот жасау
-                    </>
-                  )}
+                  {creatingPayment ? <><FaSpinner className="animate-spin mr-2" />Жасалуда...</> : <><FaCreditCard className="mr-2" />Шот жасау</>}
                 </button>
                 <button
-                  onClick={() => {
-                    setShowCreatePaymentModal(false);
-                    setSelectedAppointmentForPayment(null);
-                    setPaymentError('');
-                  }}
+                  onClick={() => { setShowCreatePaymentModal(false); setSelectedAppointmentForPayment(null); setPaymentError(''); }}
                   disabled={creatingPayment}
                   className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200"
                 >
@@ -1369,7 +1162,7 @@ const DoctorAppointments = () => {
         </div>
       )}
 
-      {/* ТӨЛЕМ СІЛТЕМЕСІ БАР МОДАЛЬДЫ ТЕРЕЗЕ */}
+      {/* МОДАЛЬ: ШОТ СІЛТЕМЕСІ */}
       {showPaymentModal && paymentDetails && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl">
@@ -1385,92 +1178,40 @@ const DoctorAppointments = () => {
                   </div>
                 </div>
                 <button
-                  onClick={() => {
-                    setShowPaymentModal(false);
-                    setPaymentDetails(null);
-                    setPaymentLink('');
-                  }}
+                  onClick={() => { setShowPaymentModal(false); setPaymentDetails(null); setPaymentLink(''); }}
                   className="p-2 hover:bg-white/20 rounded-xl transition-colors text-white"
                 >
                   <FaTimes size={20} />
                 </button>
               </div>
             </div>
-
             <div className="p-6">
-              {/* Төлем туралы ақпарат */}
               <div className="bg-blue-50 rounded-xl p-4 mb-6 border border-blue-100">
-                <div className="flex items-center mb-3">
-                  <div className="p-2 bg-white rounded-lg mr-3 border border-blue-200">
-                    <FaUserInjured className="text-blue-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-gray-800">{paymentDetails.patientName}</h3>
-                    <p className="text-gray-600 text-sm">Пациент</p>
-                  </div>
-                </div>
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-600">Сома:</span>
-                  <span className="font-bold text-xl text-gray-800">
-                    {paymentDetails.amount?.toLocaleString()} ₸
-                  </span>
+                  <span className="font-bold text-xl text-gray-800">{paymentDetails.amount?.toLocaleString()} ₸</span>
                 </div>
                 <div className="flex justify-between items-center text-sm mt-2">
                   <span className="text-gray-600">Мәртебе:</span>
-                  <span className={`px-3 py-1 rounded-lg text-xs font-medium ${paymentDetails.status === 'PENDING' || paymentDetails.status === 'pending'
-                      ? 'bg-yellow-100 text-yellow-800'
-                      : paymentDetails.status === 'PAID' || paymentDetails.status === 'paid'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
-                    {paymentDetails.status === 'PENDING' || paymentDetails.status === 'pending'
-                      ? 'Төлем күтілуде'
-                      : paymentDetails.status === 'PAID' || paymentDetails.status === 'paid'
-                        ? 'Төленген'
-                        : paymentDetails.status}
-                  </span>
+                  <span className="px-3 py-1 rounded-lg text-xs font-medium bg-yellow-100 text-yellow-800">Төлем күтілуде</span>
                 </div>
               </div>
-
               {paymentLink && (
                 <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Төлем сілтемесі:
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Төлем сілтемесі:</label>
                   <div className="flex">
-                    <input
-                      readOnly
-                      value={paymentLink}
-                      className="flex-1 border border-gray-300 rounded-l-xl px-4 py-3 bg-gray-50 text-sm"
-                    />
-                    <button
-                      onClick={() => copyLink(paymentLink)}
-                      className="bg-blue-600 text-white px-5 rounded-r-xl hover:bg-blue-700 flex items-center"
-                    >
+                    <input readOnly value={paymentLink} className="flex-1 border border-gray-300 rounded-l-xl px-4 py-3 bg-gray-50 text-sm" />
+                    <button onClick={() => copyLink(paymentLink)} className="bg-blue-600 text-white px-5 rounded-r-xl hover:bg-blue-700 flex items-center">
                       <FaCopy className="mr-2" />
                     </button>
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    Бұл сілтемені пациентке төлем жасау үшін жіберіңіз
-                  </p>
                 </div>
               )}
-
               <div className="flex gap-3">
-                <button
-                  onClick={() => window.open(paymentLink, '_blank')}
-                  className="flex-1 bg-green-600 text-white py-3 rounded-xl hover:bg-green-700 flex items-center justify-center"
-                >
+                <button onClick={() => window.open(paymentLink, '_blank')} className="flex-1 bg-green-600 text-white py-3 rounded-xl hover:bg-green-700 flex items-center justify-center">
                   <FaExternalLinkAlt className="mr-2" /> Сілтемені ашу
                 </button>
-                <button
-                  onClick={() => {
-                    setShowPaymentModal(false);
-                    setPaymentDetails(null);
-                    setPaymentLink('');
-                  }}
-                  className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl hover:bg-gray-200"
-                >
+                <button onClick={() => { setShowPaymentModal(false); setPaymentDetails(null); setPaymentLink(''); }} className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl hover:bg-gray-200">
                   Жабу
                 </button>
               </div>
@@ -1479,7 +1220,7 @@ const DoctorAppointments = () => {
         </div>
       )}
 
-      {/* ПАЦИЕНТПЕН КЕЗДЕСУ ҚҰРУ МОДАЛЬДЫ ТЕРЕЗЕСІ */}
+      {/* МОДАЛЬ: КЕЗДЕСУ ҚҰРУ */}
       {showMeetingModal && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl">
@@ -1497,11 +1238,7 @@ const DoctorAppointments = () => {
                   </div>
                 </div>
                 <button
-                  onClick={() => {
-                    setShowMeetingModal(false);
-                    setMeetingData(null);
-                    setInviteEmail('');
-                  }}
+                  onClick={() => { setShowMeetingModal(false); setMeetingData(null); setInviteEmail(''); }}
                   className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
                   disabled={sendingInvite}
                 >
@@ -1512,77 +1249,52 @@ const DoctorAppointments = () => {
 
             <div className="p-6">
               <div className="bg-blue-50 rounded-xl p-4 mb-6 border border-blue-100">
-                <div className="flex items-center mb-3">
+                <div className="flex items-center">
                   <div className="p-2 bg-white rounded-lg mr-3 border border-blue-200">
                     <FaUserInjured className="text-blue-600" />
                   </div>
                   <div>
                     <h3 className="font-bold text-gray-800 text-lg">{selectedAppointment?.patientName}</h3>
-                    <p className="text-gray-600 text-sm">Пациент</p>
+                    {selectedAppointment?.patientEmail && (
+                      <div className="text-gray-600 text-sm mt-1">
+                        <FaEnvelope className="inline mr-1 text-gray-400" />
+                        {selectedAppointment.patientEmail}
+                      </div>
+                    )}
                   </div>
                 </div>
-                {selectedAppointment?.patientEmail && (
-                  <div className="flex items-center text-gray-700 text-sm">
-                    <FaEnvelope className="mr-2 text-gray-400" />
-                    Жазылған email: <strong className="ml-1">{selectedAppointment.patientEmail}</strong>
-                  </div>
-                )}
               </div>
 
               {sendingInvite ? (
                 <div className="text-center py-10">
                   <FaSpinner className="animate-spin text-4xl text-purple-600 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-800 mb-2">Кездесу құрылуда</h3>
-                  <p className="text-gray-600">Шақыру жіберілуде...</p>
+                  <p className="text-gray-600">Кездесу құрылуда, шақыру жіберілуде...</p>
                 </div>
               ) : meetingData?.meetingUrl ? (
                 <div>
-                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-5 mb-6 border border-green-200">
-                    <div className="flex items-center mb-3">
-                      <div className="p-2 bg-green-100 rounded-lg mr-3">
-                        <FaCheck className="text-green-600" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-gray-800 text-lg">Шақыру жіберілді!</h3>
-                        <p className="text-gray-600 text-sm">Сілтеме пациентке жіберілді</p>
-                      </div>
+                  <div className="bg-green-50 rounded-xl p-5 mb-6 border border-green-200 flex items-center gap-3">
+                    <div className="p-2 bg-green-100 rounded-lg">
+                      <FaCheck className="text-green-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-gray-800">Шақыру жіберілді!</h3>
+                      <p className="text-gray-600 text-sm">Сілтеме пациентке жіберілді. Кездесуді "Бастау" арқылы іске қосыңыз.</p>
                     </div>
                   </div>
-
                   <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Кездесу сілтемесі:
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Кездесу сілтемесі:</label>
                     <div className="flex">
-                      <input
-                        readOnly
-                        value={meetingData.meetingUrl}
-                        className="flex-1 border border-gray-300 rounded-l-xl px-4 py-3 bg-gray-50 text-sm"
-                      />
-                      <button
-                        onClick={() => copyLink(meetingData.meetingUrl)}
-                        className="bg-blue-600 text-white px-5 rounded-r-xl hover:bg-blue-700 flex items-center"
-                      >
+                      <input readOnly value={meetingData.meetingUrl} className="flex-1 border border-gray-300 rounded-l-xl px-4 py-3 bg-gray-50 text-sm" />
+                      <button onClick={() => copyLink(meetingData.meetingUrl)} className="bg-blue-600 text-white px-5 rounded-r-xl hover:bg-blue-700 flex items-center">
                         <FaCopy className="mr-2" /> Көшіру
                       </button>
                     </div>
                   </div>
-
                   <div className="flex gap-3">
-                    <button
-                      onClick={() => window.open(meetingData.meetingUrl, '_blank')}
-                      className="flex-1 bg-green-600 text-white py-3 rounded-xl hover:bg-green-700 flex items-center justify-center"
-                    >
+                    <button onClick={() => window.open(meetingData.meetingUrl, '_blank')} className="flex-1 bg-green-600 text-white py-3 rounded-xl hover:bg-green-700 flex items-center justify-center">
                       <FaVideo className="mr-2" /> Қосылу
                     </button>
-                    <button
-                      onClick={() => {
-                        setShowMeetingModal(false);
-                        setMeetingData(null);
-                        setInviteEmail('');
-                      }}
-                      className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl hover:bg-gray-200"
-                    >
+                    <button onClick={() => { setShowMeetingModal(false); setMeetingData(null); setInviteEmail(''); }} className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl hover:bg-gray-200">
                       Жабу
                     </button>
                   </div>
@@ -1590,9 +1302,7 @@ const DoctorAppointments = () => {
               ) : (
                 <>
                   <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Пациенттің email-і:
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Пациенттің email-і:</label>
                     <input
                       type="email"
                       value={inviteEmail}
@@ -1601,26 +1311,12 @@ const DoctorAppointments = () => {
                       className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-purple-500"
                     />
                   </div>
-
                   <button
                     onClick={sendInvite}
                     disabled={sendingInvite || !inviteEmail.trim()}
-                    className={`w-full py-3.5 rounded-xl text-white font-medium flex items-center justify-center ${sendingInvite || !inviteEmail.trim()
-                      ? 'bg-gray-400 cursor-not-allowed'
-                      : 'bg-purple-600 hover:bg-purple-700'
-                      }`}
+                    className={`w-full py-3.5 rounded-xl text-white font-medium flex items-center justify-center ${sendingInvite || !inviteEmail.trim() ? 'bg-gray-400 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'}`}
                   >
-                    {sendingInvite ? (
-                      <>
-                        <FaSpinner className="animate-spin mr-2" />
-                        Құрылуда...
-                      </>
-                    ) : (
-                      <>
-                        <FaPaperPlane className="mr-2" />
-                        Кездесу құру және шақыру жіберу
-                      </>
-                    )}
+                    <FaPaperPlane className="mr-2" /> Кездесу құру және шақыру жіберу
                   </button>
                 </>
               )}
@@ -1629,7 +1325,7 @@ const DoctorAppointments = () => {
         </div>
       )}
 
-      {/* КЕЗДЕСУДІ ӘРІПТЕСПЕН БӨЛІСУ МОДАЛЬДЫ ТЕРЕЗЕСІ */}
+      {/* МОДАЛЬ: КЕЗДЕСУДІ БӨЛІСУ */}
       {showShareModal && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
@@ -1638,21 +1334,14 @@ const DoctorAppointments = () => {
                 <FaUserTie className="mr-3 text-indigo-600" />
                 Кездесуді бөлісу
               </h2>
-              <p className="text-sm text-gray-500 mt-1">
-                Сілтемені басқа дәрігерге жіберу
-              </p>
+              <p className="text-sm text-gray-500 mt-1">Сілтемені басқа дәрігерге жіберу</p>
             </div>
-
             <div className="p-6">
               {doctors.length === 0 ? (
-                <p className="text-center py-8 text-gray-500">
-                  Дәрігерлер тізімі жүктелмеді...
-                </p>
+                <p className="text-center py-8 text-gray-500">Дәрігерлер тізімі жүктелмеді...</p>
               ) : (
                 <>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Әріптесті таңдаңыз:
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Әріптесті таңдаңыз:</label>
                   <select
                     value={selectedDoctorId}
                     onChange={e => setSelectedDoctorId(e.target.value)}
@@ -1665,44 +1354,23 @@ const DoctorAppointments = () => {
                       </option>
                     ))}
                   </select>
-
                   {selectedDoctorId && (
                     <div className="mt-4 p-3 bg-gray-50 rounded-xl text-sm">
-                      Email: <strong>
-                        {doctors.find(d => d.id === parseInt(selectedDoctorId))?.email || 'көрсетілмеген'}
-                      </strong>
+                      Email: <strong>{doctors.find(d => d.id === parseInt(selectedDoctorId))?.email || 'көрсетілмеген'}</strong>
                     </div>
                   )}
                 </>
               )}
-
               <div className="mt-8 flex gap-3">
                 <button
                   onClick={shareMeetingWithDoctor}
                   disabled={sharing || !selectedDoctorId}
-                  className={`flex-1 py-3 rounded-xl font-medium flex items-center justify-center ${!selectedDoctorId || sharing
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                    }`}
+                  className={`flex-1 py-3 rounded-xl font-medium flex items-center justify-center ${!selectedDoctorId || sharing ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
                 >
-                  {sharing ? (
-                    <>
-                      <FaSpinner className="animate-spin mr-2" />
-                      Жіберілуде...
-                    </>
-                  ) : (
-                    <>
-                      <FaPaperPlane className="mr-2" />
-                      Сілтемені жіберу
-                    </>
-                  )}
+                  {sharing ? <><FaSpinner className="animate-spin mr-2" />Жіберілуде...</> : <><FaPaperPlane className="mr-2" />Сілтемені жіберу</>}
                 </button>
-
                 <button
-                  onClick={() => {
-                    setShowShareModal(false);
-                    setSelectedDoctorId('');
-                  }}
+                  onClick={() => { setShowShareModal(false); setSelectedDoctorId(''); }}
                   className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200"
                 >
                   Болдырмау
