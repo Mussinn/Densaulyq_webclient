@@ -1,8 +1,16 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useSelector } from "react-redux";
-import { FaVideo, FaCopy, FaCalendarAlt, FaUsers, FaUserMd, FaShieldAlt } from "react-icons/fa";
+import { FaVideo, FaCopy, FaCalendarAlt, FaUsers, FaUserMd, FaShieldAlt, FaEnvelope, FaSpinner } from "react-icons/fa";
 import { GiNetworkBars, GiVideoConference } from "react-icons/gi";
+import emailjs from '@emailjs/browser';
+
+// ВАШИ КЛЮЧИ ИЗ EMAILJS (замените на свои)
+const EMAILJS_PUBLIC_KEY = "0ojvFPPMESJ9eZ_Ht";  // Ваш Public Key
+const EMAILJS_SERVICE_ID = "service_372velq";       // Замените на ваш Service ID
+const EMAILJS_TEMPLATE_ID = "template_swsa3af";     // Замените на ваш Template ID
+
+emailjs.init(EMAILJS_PUBLIC_KEY);
 
 const VideoConferencePage = () => {
   const [meetings, setMeetings] = useState([]);
@@ -10,10 +18,12 @@ const VideoConferencePage = () => {
     topic: "",
     description: "",
     participants: "",
+    sendEmails: true,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [sendingEmails, setSendingEmails] = useState(false);
   
   const { user: userData } = useSelector((state) => state.token);
 
@@ -34,8 +44,60 @@ const VideoConferencePage = () => {
 
   // Генерация уникальной ссылки для Jitsi Meet
   const generateMeetingLink = () => {
-    const roomId = `MedicalConsult_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+    const roomId = `MedSafe_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
     return `https://meet.jit.si/${roomId}`;
+  };
+
+  // Форматирование даты для email
+  const formatDateForEmail = (date) => {
+    return new Date(date).toLocaleString('kk-KZ', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+  };
+
+  // Отправка email приглашений через EmailJS
+  const sendMeetingInvitations = async (meetingDetails) => {
+    if (!meetingDetails.participants || meetingDetails.participants.length === 0) {
+      return;
+    }
+
+    setSendingEmails(true);
+    
+    try {
+      const doctorName = userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || "Дәрігер" : "Дәрігер";
+      const meetingDate = formatDateForEmail(meetingDetails.date);
+      
+      // Отправляем приглашения каждому участнику
+      const emailPromises = meetingDetails.participants.map(participantEmail => 
+        emailjs.send(
+          EMAILJS_SERVICE_ID,
+          EMAILJS_TEMPLATE_ID,
+          {
+            to_email: participantEmail,
+            to_name: participantEmail.split('@')[0],
+            doctor_name: doctorName,
+            meeting_topic: meetingDetails.topic,
+            meeting_description: meetingDetails.description || 'Жоқ',
+            meeting_date: meetingDate,
+            meeting_link: meetingDetails.meetingUrl,
+          }
+        )
+      );
+
+      await Promise.all(emailPromises);
+      return true;
+      
+    } catch (error) {
+      console.error('Email жіберу қатесі:', error);
+      throw new Error('Кейбір шақырулар жіберілмеді. Email мекенжайларын тексеріңіз.');
+    } finally {
+      setSendingEmails(false);
+    }
   };
 
   const handleCreateMeeting = async (e) => {
@@ -45,9 +107,12 @@ const VideoConferencePage = () => {
     setSuccess("");
 
     try {
-      // Генерируем ссылку без бэкенда
       const meetingUrl = generateMeetingLink();
       const roomId = meetingUrl.split('/').pop();
+      
+      const participantsList = newMeeting.participants 
+        ? newMeeting.participants.split(',').map(email => email.trim()).filter(email => email)
+        : [];
       
       const newMeetingObj = {
         id: Date.now(),
@@ -55,29 +120,53 @@ const VideoConferencePage = () => {
         meetingUrl: meetingUrl,
         roomId: roomId,
         date: new Date().toISOString(),
-        participants: newMeeting.participants 
-          ? newMeeting.participants.split(',').map(email => email.trim()).filter(email => email)
-          : [],
+        participants: participantsList,
         description: newMeeting.description,
         doctor: userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || "Дәрігер" : "Дәрігер",
         status: "active"
       };
 
       setMeetings(prevMeetings => [newMeetingObj, ...prevMeetings]);
-      setSuccess(`Кездесу құрылды! Сілтеме: ${meetingUrl}`);
       
-      // Сбрасываем форму
+      if (newMeeting.sendEmails && participantsList.length > 0) {
+        await sendMeetingInvitations(newMeetingObj);
+        setSuccess(`✅ Кездесу құрылды! ${participantsList.length} қатысушыға Email шақыру жіберілді.`);
+      } else if (participantsList.length === 0) {
+        setSuccess(`✅ Кездесу құрылды! Сілтеме: ${meetingUrl}`);
+      } else {
+        setSuccess(`✅ Кездесу құрылды! Шақырулар жіберілмеді. Сілтеме: ${meetingUrl}`);
+      }
+      
       setNewMeeting({
         topic: "",
         description: "",
         participants: "",
+        sendEmails: true,
       });
 
     } catch (err) {
       console.error("Кездесу құру қатесі:", err);
-      setError("Кездесу құру мүмкін болмады. Қайталап көріңіз.");
+      setError(err.message || "Кездесу құру мүмкін болмады. Қайталап көріңіз.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const sendInvitationAgain = async (meeting) => {
+    if (!meeting.participants || meeting.participants.length === 0) {
+      setError("Бұл кездесуде қатысушылар жоқ");
+      return;
+    }
+
+    setSendingEmails(true);
+    try {
+      await sendMeetingInvitations(meeting);
+      setSuccess(`✅ Шақырулар қайта жіберілді! ${meeting.participants.length} қатысушыға`);
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSendingEmails(false);
     }
   };
 
@@ -235,7 +324,7 @@ const VideoConferencePage = () => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
                       <FaVideo className="mr-2 text-gray-400" />
-                      Кездесу тақырыбы
+                      Кездесу тақырыбы *
                     </label>
                     <input
                       type="text"
@@ -252,7 +341,7 @@ const VideoConferencePage = () => {
                       <svg className="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
                       </svg>
-                      Сипаттама (міндетті емес)
+                      Сипаттама
                     </label>
                     <textarea
                       value={newMeeting.description}
@@ -273,11 +362,25 @@ const VideoConferencePage = () => {
                       value={newMeeting.participants}
                       onChange={(e) => setNewMeeting({...newMeeting, participants: e.target.value})}
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
-                      placeholder="dariyer@densaulyq.kz, науқас@gmail.com"
+                      placeholder="doctor@example.com, patient@gmail.com, nurse@example.com"
                     />
                     <p className="text-xs text-gray-500 mt-2">
-                      Барлық қатысушыларға кездесу сілтемесін жіберіңіз
+                      Email мекенжайларын үтірмен бөліп жазыңыз
                     </p>
+                  </div>
+
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="sendEmails"
+                      checked={newMeeting.sendEmails}
+                      onChange={(e) => setNewMeeting({...newMeeting, sendEmails: e.target.checked})}
+                      className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                    />
+                    <label htmlFor="sendEmails" className="ml-2 text-sm text-gray-700 flex items-center">
+                      <FaEnvelope className="mr-1 text-gray-400" />
+                      Қатысушыларға Email шақыру жіберу
+                    </label>
                   </div>
 
                   <div className="flex flex-col sm:flex-row items-center justify-between pt-4 border-t border-gray-100">
@@ -296,20 +399,17 @@ const VideoConferencePage = () => {
 
                     <button
                       type="submit"
-                      disabled={loading}
+                      disabled={loading || sendingEmails}
                       className={`px-8 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center shadow-md hover:shadow-lg ${
-                        loading 
+                        loading || sendingEmails
                           ? 'bg-gray-400 cursor-not-allowed' 
                           : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white'
                       }`}
                     >
-                      {loading ? (
+                      {(loading || sendingEmails) ? (
                         <>
-                          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                          </svg>
-                          Құрылуда...
+                          <FaSpinner className="animate-spin mr-2" />
+                          {sendingEmails ? 'Шақыру жіберілуде...' : 'Құрылуда...'}
                         </>
                       ) : (
                         <>
@@ -460,6 +560,18 @@ const VideoConferencePage = () => {
                               <FaCopy className="mr-2" />
                               Көшіру
                             </button>
+
+                            {meeting.participants.length > 0 && (
+                              <button
+                                onClick={() => sendInvitationAgain(meeting)}
+                                disabled={sendingEmails}
+                                className="px-4 py-3 border border-blue-300 text-blue-700 rounded-xl font-medium hover:bg-blue-50 transition flex items-center justify-center"
+                                title="Шақыруды қайта жіберу"
+                              >
+                                <FaEnvelope className="mr-2" />
+                                Қайта жіберу
+                              </button>
+                            )}
                           </div>
 
                           <div className="mt-5 pt-5 border-t border-gray-100">
@@ -500,6 +612,7 @@ const VideoConferencePage = () => {
                     topic: `Жедел консультация ${new Date().toLocaleTimeString('kk-KZ', { hour: '2-digit', minute: '2-digit' })}`,
                     description: "Науқас пен дәрігердің жедел байланысы",
                     participants: "",
+                    sendEmails: true,
                   });
                   setTimeout(() => {
                     document.querySelector('form')?.scrollIntoView({ behavior: 'smooth' });
@@ -530,7 +643,7 @@ const VideoConferencePage = () => {
                   </div>
                   <div>
                     <p className="font-medium text-gray-800">Кездесуді құрыңыз</p>
-                    <p className="text-sm text-gray-600">Тақырып пен сипаттаманы енгізіп, қауіпсіз бөлмені құрыңыз</p>
+                    <p className="text-sm text-gray-600">Тақырып пен сипаттаманы енгізіңіз</p>
                   </div>
                 </div>
                 
@@ -539,8 +652,8 @@ const VideoConferencePage = () => {
                     2
                   </div>
                   <div>
-                    <p className="font-medium text-gray-800">Сілтемені жіберіңіз</p>
-                    <p className="text-sm text-gray-600">Кездесу сілтемесін науқастарға немесе әріптестерге жіберіңіз</p>
+                    <p className="font-medium text-gray-800">Қатысушыларды қосыңыз</p>
+                    <p className="text-sm text-gray-600">Email мекенжайларын үтірмен бөліп жазыңыз</p>
                   </div>
                 </div>
                 
@@ -549,8 +662,8 @@ const VideoConferencePage = () => {
                     3
                   </div>
                   <div>
-                    <p className="font-medium text-gray-800">Консультация жасаңыз</p>
-                    <p className="text-sm text-gray-600">Браузер арқылы кездесуге қосылыңыз және консультация жасаңыз</p>
+                    <p className="font-medium text-gray-800">Консультация өткізіңіз</p>
+                    <p className="text-sm text-gray-600">Браузер арқылы кездесуге қосылыңыз</p>
                   </div>
                 </div>
               </div>
